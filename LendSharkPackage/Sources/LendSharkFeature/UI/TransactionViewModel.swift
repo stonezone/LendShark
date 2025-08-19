@@ -41,12 +41,15 @@ public final class TransactionViewModel: ObservableObject {
     
     // MARK: - Transaction Operations
     
-    public func parseAndAddTransaction(_ input: String, context: NSManagedObjectContext) async {
+    public func parseAndAddTransaction(_ input: String, context: NSManagedObjectContext) async -> Bool {
         guard let parserService = parserService,
               let transactionService = transactionService else {
             showError(message: "Services not initialized")
-            return
+            return false
         }
+        
+        // Clear previous error
+        clearError()
         
         // Parse input
         let result = parserService.parse(input)
@@ -55,9 +58,6 @@ public final class TransactionViewModel: ObservableObject {
         case .success(let action):
             switch action {
             case .add(let dto):
-                // Show preview
-                parsePreview = formatPreview(dto)
-                
                 // Add transaction
                 do {
                     _ = try await transactionService.addTransaction(dto)
@@ -67,8 +67,10 @@ public final class TransactionViewModel: ObservableObject {
                     if let syncService = syncService, syncService.isSyncEnabled() {
                         try? await syncService.syncTransactions()
                     }
+                    return true
                 } catch {
                     showError(message: error.localizedDescription)
+                    return false
                 }
                 
             case .settle(let party):
@@ -76,17 +78,26 @@ public final class TransactionViewModel: ObservableObject {
                     let count = try await transactionService.settleTransactions(for: party)
                     if count == 0 {
                         showError(message: "No unsettled transactions found for \(party)")
+                        return false
                     } else {
-                        parsePreview = "Settled \(count) transaction(s) with \(party)"
+                        parsePreview = "Successfully settled \(count) transaction(s) with \(party)"
+                        // Clear after a delay to show the success message
+                        Task {
+                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                            parsePreview = nil
+                        }
+                        return true
                     }
                 } catch {
                     showError(message: error.localizedDescription)
+                    return false
                 }
             }
             
         case .failure(let error):
             showError(message: error.localizedDescription)
             parsePreview = nil
+            return false
         }
     }
     
@@ -158,6 +169,32 @@ public final class TransactionViewModel: ObservableObject {
         let preposition = dto.direction == .lent ? "to" : "from"
         
         return "\(action) \(amountOrItem) \(preposition) \(dto.party)"
+    }
+    
+    public func updateParsePreview(_ input: String) async {
+        guard !input.isEmpty else {
+            parsePreview = nil
+            return
+        }
+        
+        guard let parserService = parserService else {
+            parsePreview = nil
+            return
+        }
+        
+        let result = parserService.parse(input)
+        
+        switch result {
+        case .success(let action):
+            switch action {
+            case .add(let dto):
+                parsePreview = formatPreview(dto)
+            case .settle(let party):
+                parsePreview = "Will settle all transactions with \(party)"
+            }
+        case .failure:
+            parsePreview = nil
+        }
     }
     
     public func showError(message: String) {

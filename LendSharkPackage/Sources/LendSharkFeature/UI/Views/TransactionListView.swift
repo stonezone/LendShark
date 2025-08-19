@@ -294,9 +294,34 @@ struct AddTransactionSheet: View {
                 transaction.notes = dto.notes
             case .settle(let party):
                 // Handle settlement - find and mark transactions as settled
-                errorMessage = "Settlement not yet implemented for: \(party)"
-                showError = true
-                return
+                let request: NSFetchRequest<Transaction> = Transaction.fetchRequest()
+                request.predicate = NSPredicate(
+                    format: "party ==[c] %@ AND settled == NO",
+                    party
+                )
+                
+                do {
+                    let transactions = try viewContext.fetch(request)
+                    if transactions.isEmpty {
+                        errorMessage = "No unsettled transactions found for \(party)"
+                        showError = true
+                        return
+                    }
+                    
+                    // Mark all as settled
+                    for transaction in transactions {
+                        transaction.settled = true
+                    }
+                    
+                    // Save and dismiss
+                    try viewContext.save()
+                    dismiss()
+                    
+                } catch {
+                    errorMessage = "Failed to settle transactions: \(error.localizedDescription)"
+                    showError = true
+                    return
+                }
             }
         }
         
