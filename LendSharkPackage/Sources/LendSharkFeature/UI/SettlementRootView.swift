@@ -62,7 +62,8 @@ public struct SettlementRootView: View {
         guard !name.isEmpty else { return "Type a name to clear their tab." }
         let total = Transaction.totalOwed(by: name, in: viewContext)
         let amount = NSDecimalNumber(decimal: total).doubleValue
-        return "On the books for \(name.uppercased()): $\(String(format: \"%.2f\", amount))"
+        let formatted = String(format: "%.2f", amount)
+        return "On the books for \(name.uppercased()): $\(formatted)"
     }
     
     private func settleFull() {

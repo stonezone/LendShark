@@ -45,31 +45,31 @@ public final class ParserService: Sendable {
         }
         
         // Pattern: "[name] owes [amount]" or "[name] owes me [amount]"
-        if let owesResult = parseOwes(words) {
+        if let owesResult = parseOwes(words, originalText: text) {
             return owesResult
         }
         
         // Pattern: "i owe [name] [amount]"
-        if let iOweResult = parseIOwe(words) {
+        if let iOweResult = parseIOwe(words, originalText: text) {
             return iOweResult
         }
         
         // Pattern: "lent [amount] to [name]"
-        if let lentResult = parseLent(words) {
+        if let lentResult = parseLent(words, originalText: text) {
             return lentResult
         }
         
         // Pattern: "borrowed [amount] from [name]"
-        if let borrowedResult = parseBorrowed(words) {
+        if let borrowedResult = parseBorrowed(words, originalText: text) {
             return borrowedResult
         }
         
         // Pattern: "[name] paid [amount]" or "paid [name] [amount]"
-        if let paidResult = parsePaid(words) {
+        if let paidResult = parsePaid(words, originalText: text) {
             return paidResult
         }
         
-        return .failure(.invalidFormat("Didn't catch that. Try 'john owes 50' or 'lent 20 to sarah'."))
+        return .failure(.invalidFormat("Didn't catch that. Try 'john owes 50 due 2 weeks at 10%'."))
     }
     
     // MARK: - Parse Patterns
@@ -84,7 +84,7 @@ public final class ParserService: Sendable {
         return nil
     }
     
-    private func parseOwes(_ words: [String]) -> Result<ParsedAction, ParsingError>? {
+    private func parseOwes(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard let owesIdx = words.firstIndex(where: { $0 == "owes" || $0 == "owe" }) else { return nil }
         guard owesIdx > 0 else { return nil }
         
@@ -99,94 +99,90 @@ public final class ParserService: Sendable {
         guard amountIdx < words.count else { return nil }
         
         if let amount = parseAmount(words[amountIdx]) {
-            let dto = TransactionDTO(
-                party: name,
-                amount: amount,
-                direction: .lent,
-                isItem: false
-            )
+            let dto = createDTO(party: name, amount: amount, direction: .lent, originalText: originalText)
             return .success(.add(dto))
         }
         return nil
     }
     
-    private func parseIOwe(_ words: [String]) -> Result<ParsedAction, ParsingError>? {
+    private func parseIOwe(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard words.first == "i" else { return nil }
         guard let oweIdx = words.firstIndex(of: "owe"), oweIdx + 2 < words.count else { return nil }
         
         let name = words[oweIdx + 1].capitalized
         
         if let amount = parseAmount(words[oweIdx + 2]) {
-            let dto = TransactionDTO(
-                party: name,
-                amount: amount,
-                direction: .borrowed,
-                isItem: false
-            )
+            let dto = createDTO(party: name, amount: amount, direction: .borrowed, originalText: originalText)
             return .success(.add(dto))
         }
         return nil
     }
     
-    private func parseLent(_ words: [String]) -> Result<ParsedAction, ParsingError>? {
+    private func parseLent(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard let lentIdx = words.firstIndex(of: "lent"), lentIdx + 1 < words.count else { return nil }
         
         guard let amount = parseAmount(words[lentIdx + 1]) else { return nil }
         
         if let toIdx = words.firstIndex(of: "to"), toIdx + 1 < words.count {
             let name = words[toIdx + 1].capitalized
-            let dto = TransactionDTO(
-                party: name,
-                amount: amount,
-                direction: .lent,
-                isItem: false
-            )
+            let dto = createDTO(party: name, amount: amount, direction: .lent, originalText: originalText)
             return .success(.add(dto))
         }
         return nil
     }
     
-    private func parseBorrowed(_ words: [String]) -> Result<ParsedAction, ParsingError>? {
+    private func parseBorrowed(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard let borrowedIdx = words.firstIndex(of: "borrowed"), borrowedIdx + 1 < words.count else { return nil }
         
         guard let amount = parseAmount(words[borrowedIdx + 1]) else { return nil }
         
         if let fromIdx = words.firstIndex(of: "from"), fromIdx + 1 < words.count {
             let name = words[fromIdx + 1].capitalized
-            let dto = TransactionDTO(
-                party: name,
-                amount: amount,
-                direction: .borrowed,
-                isItem: false
-            )
+            let dto = createDTO(party: name, amount: amount, direction: .borrowed, originalText: originalText)
             return .success(.add(dto))
         }
         return nil
     }
     
-    private func parsePaid(_ words: [String]) -> Result<ParsedAction, ParsingError>? {
+    private func parsePaid(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard let paidIdx = words.firstIndex(of: "paid") else { return nil }
         
-        // "[name] paid [amount]" - settlement
+        // "[name] paid [amount]" - partial payment (creates counter-transaction)
+        // Pattern: "john paid 50" or "john paid 50 toward debt"
         if paidIdx > 0 {
             let name = words[paidIdx - 1].capitalized
             if paidIdx + 1 < words.count, let amount = parseAmount(words[paidIdx + 1]) {
+                // Create partial payment - direction .borrowed means they paid us (reduces debt)
                 let dto = TransactionDTO(
                     party: name,
                     amount: amount,
-                    direction: .lent,
+                    direction: .borrowed, // Payment FROM them TO us
                     isItem: false,
-                    settled: true
+                    settled: true, // Payments are already "settled"
+                    notes: "Partial payment"
                 )
                 return .success(.add(dto))
             }
-            // Just "[name] paid" - settle all
+            // Just "[name] paid" without amount - settle all
             return .success(.settle(name))
         }
         
-        // "paid [name]" - settle all with that person
+        // "paid [name] [amount]" - partial payment
         if paidIdx + 1 < words.count {
             let name = words[paidIdx + 1].capitalized
+            // Check if there's an amount after name
+            if paidIdx + 2 < words.count, let amount = parseAmount(words[paidIdx + 2]) {
+                let dto = TransactionDTO(
+                    party: name,
+                    amount: amount,
+                    direction: .borrowed,
+                    isItem: false,
+                    settled: true,
+                    notes: "Partial payment"
+                )
+                return .success(.add(dto))
+            }
+            // Just "paid [name]" - settle all
             return .success(.settle(name))
         }
         
@@ -198,5 +194,82 @@ public final class ParserService: Sendable {
     private func parseAmount(_ token: String) -> Decimal? {
         let cleaned = token.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
         return Decimal(string: cleaned)
+    }
+    
+    // MARK: - Modifier Extraction
+    
+    /// Extract due date from patterns like "due 2 weeks", "due friday", "due tomorrow"
+    private func extractDueDate(from text: String) -> Date? {
+        let lower = text.lowercased()
+        
+        // Pattern: "due X days/weeks"
+        if let range = lower.range(of: #"due\s+(\d+)\s*(day|week|month)s?"#, options: .regularExpression) {
+            let match = String(lower[range])
+            let parts = match.components(separatedBy: .whitespaces)
+            if parts.count >= 3, let num = Int(parts[1]) {
+                let unit = parts[2]
+                var days = num
+                if unit.hasPrefix("week") { days = num * 7 }
+                if unit.hasPrefix("month") { days = num * 30 }
+                return Calendar.current.date(byAdding: .day, value: days, to: Date())
+            }
+        }
+        
+        // Pattern: "due tomorrow"
+        if lower.contains("due tomorrow") {
+            return Calendar.current.date(byAdding: .day, value: 1, to: Date())
+        }
+        
+        // Pattern: "due next week"
+        if lower.contains("due next week") {
+            return Calendar.current.date(byAdding: .day, value: 7, to: Date())
+        }
+        
+        return nil
+    }
+    
+    /// Extract interest rate from patterns like "at 10%" or "10% interest"
+    private func extractInterestRate(from text: String) -> Decimal? {
+        let lower = text.lowercased()
+        
+        // Pattern: "at X%" or "X% interest" or "X% weekly"
+        if let range = lower.range(of: #"(\d+(?:\.\d+)?)\s*%"#, options: .regularExpression) {
+            let match = String(lower[range])
+            let numStr = match.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
+            if let rate = Decimal(string: numStr) {
+                return rate / 100 // Convert percentage to decimal
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Extract notes/collateral from parentheses: "(has my watch)"
+    private func extractNotes(from text: String) -> String? {
+        if let start = text.firstIndex(of: "("),
+           let end = text.firstIndex(of: ")"),
+           start < end {
+            let noteStart = text.index(after: start)
+            return String(text[noteStart..<end])
+        }
+        return nil
+    }
+    
+    /// Enhanced DTO creation with modifiers
+    private func createDTO(
+        party: String,
+        amount: Decimal,
+        direction: TransactionDTO.TransactionDirection,
+        originalText: String
+    ) -> TransactionDTO {
+        return TransactionDTO(
+            party: party,
+            amount: amount,
+            direction: direction,
+            isItem: false,
+            dueDate: extractDueDate(from: originalText),
+            interestRate: extractInterestRate(from: originalText),
+            notes: extractNotes(from: originalText)
+        )
     }
 }

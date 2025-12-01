@@ -7,12 +7,16 @@ public struct QuickAddView: View {
     @State private var inputText = ""
     @State private var showError = false
     @State private var errorMessage = ""
+    @FocusState private var isInputFocused: Bool
     
     public init() {}
     
     public var body: some View {
         ZStack {
             RuledLinesBackground()
+                .onTapGesture {
+                    isInputFocused = false
+                }
             
             VStack(alignment: .leading, spacing: 16) {
             Text("QUICK ADD")
@@ -21,10 +25,15 @@ public struct QuickAddView: View {
             
             TextField("e.g. john owes 50", text: $inputText)
                 .font(.system(size: 18, weight: .regular, design: .monospaced))
+                .foregroundColor(.inkBlack)
                 .textFieldStyle(.plain)
                 .padding(.vertical, 8)
                 .overlay(Rectangle().frame(height: 1).foregroundColor(.inkBlack), alignment: .bottom)
-                .onSubmit(add)
+                .focused($isInputFocused)
+                .onSubmit {
+                    add()
+                    isInputFocused = false
+                }
             
             if !previewText.isEmpty {
                 Text(previewText)
@@ -61,13 +70,30 @@ public struct QuickAddView: View {
                 let who = dto.party
                 let amount = dto.amount ?? 0
                 let dollars = String(format: "%.2f", NSDecimalNumber(decimal: amount).doubleValue)
-                if dto.direction == .lent {
-                    return "Will record: \(who.uppercased()) owes $\(dollars)"
-                } else {
-                    return "Will record: I owe \(who.uppercased()) $\(dollars)"
+                var base = dto.direction == .lent 
+                    ? "\(who.uppercased()) owes $\(dollars)"
+                    : "I owe \(who.uppercased()) $\(dollars)"
+                
+                // Add interest if present
+                if let rate = dto.interestRate {
+                    let pct = NSDecimalNumber(decimal: rate * 100).intValue
+                    base += " @ \(pct)%/wk"
                 }
+                
+                // Add due date if present
+                if let due = dto.dueDate {
+                    let days = Calendar.current.dateComponents([.day], from: Date(), to: due).day ?? 0
+                    base += " (due in \(days)d)"
+                }
+                
+                // Add notes if present
+                if let notes = dto.notes, !notes.isEmpty {
+                    base += " [\(notes)]"
+                }
+                
+                return base
             case .settle(let name):
-                return "Will mark everything with \(name.uppercased()) as PAID."
+                return "Mark \(name.uppercased()) as PAID"
             }
         case .failure:
             return ""
@@ -95,11 +121,15 @@ public struct QuickAddView: View {
                     t.isItem = dto.isItem
                     t.settled = dto.settled
                     t.timestamp = dto.timestamp
+                    t.dueDate = dto.dueDate
+                    t.interestRate = dto.interestRate.map { NSDecimalNumber(decimal: $0) }
+                    t.notes = dto.notes
                     try viewContext.save()
                 case .settle(let name):
                     try Transaction.settleAll(with: name, in: viewContext)
                 }
                 inputText = ""
+                isInputFocused = false
             } catch {
                 errorMessage = error.localizedDescription
                 showError = true

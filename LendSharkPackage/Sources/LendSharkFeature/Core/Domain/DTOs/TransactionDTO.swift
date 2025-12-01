@@ -12,6 +12,7 @@ public struct TransactionDTO: Codable, Equatable, Hashable, Sendable {
     public let settled: Bool
     public let timestamp: Date
     public let dueDate: Date?
+    public let interestRate: Decimal?
     public let notes: String?
     public let cloudKitRecordID: String?
     
@@ -30,6 +31,7 @@ public struct TransactionDTO: Codable, Equatable, Hashable, Sendable {
         settled: Bool = false,
         timestamp: Date = Date(),
         dueDate: Date? = nil,
+        interestRate: Decimal? = nil,
         notes: String? = nil,
         cloudKitRecordID: String? = nil
     ) {
@@ -42,6 +44,7 @@ public struct TransactionDTO: Codable, Equatable, Hashable, Sendable {
         self.settled = settled
         self.timestamp = timestamp
         self.dueDate = dueDate
+        self.interestRate = interestRate
         self.notes = notes
         self.cloudKitRecordID = cloudKitRecordID
     }
