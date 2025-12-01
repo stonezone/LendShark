@@ -87,18 +87,19 @@ public final class ParserService: Sendable {
     private func parseOwes(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard let owesIdx = words.firstIndex(where: { $0 == "owes" || $0 == "owe" }) else { return nil }
         guard owesIdx > 0 else { return nil }
-        
+
         let name = words[owesIdx - 1].capitalized
-        
+
         // Skip "me" if present: "[name] owes me [amount]"
         var amountIdx = owesIdx + 1
         if amountIdx < words.count && words[amountIdx] == "me" {
             amountIdx += 1
         }
-        
+
         guard amountIdx < words.count else { return nil }
-        
-        if let amount = parseAmount(words[amountIdx]) {
+
+        // Try two-word amount first ("2 notes"), then single word
+        if let amount = parseAmountFromWords(words, startingAt: amountIdx) {
             let dto = createDTO(party: name, amount: amount, direction: .lent, originalText: originalText)
             return .success(.add(dto))
         }
@@ -108,10 +109,11 @@ public final class ParserService: Sendable {
     private func parseIOwe(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard words.first == "i" else { return nil }
         guard let oweIdx = words.firstIndex(of: "owe"), oweIdx + 2 < words.count else { return nil }
-        
+
         let name = words[oweIdx + 1].capitalized
-        
-        if let amount = parseAmount(words[oweIdx + 2]) {
+
+        // Try two-word amount first ("2 notes"), then single word
+        if let amount = parseAmountFromWords(words, startingAt: oweIdx + 2) {
             let dto = createDTO(party: name, amount: amount, direction: .borrowed, originalText: originalText)
             return .success(.add(dto))
         }
@@ -120,9 +122,9 @@ public final class ParserService: Sendable {
     
     private func parseLent(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard let lentIdx = words.firstIndex(of: "lent"), lentIdx + 1 < words.count else { return nil }
-        
-        guard let amount = parseAmount(words[lentIdx + 1]) else { return nil }
-        
+
+        guard let amount = parseAmountFromWords(words, startingAt: lentIdx + 1) else { return nil }
+
         if let toIdx = words.firstIndex(of: "to"), toIdx + 1 < words.count {
             let name = words[toIdx + 1].capitalized
             let dto = createDTO(party: name, amount: amount, direction: .lent, originalText: originalText)
@@ -133,9 +135,9 @@ public final class ParserService: Sendable {
     
     private func parseBorrowed(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard let borrowedIdx = words.firstIndex(of: "borrowed"), borrowedIdx + 1 < words.count else { return nil }
-        
-        guard let amount = parseAmount(words[borrowedIdx + 1]) else { return nil }
-        
+
+        guard let amount = parseAmountFromWords(words, startingAt: borrowedIdx + 1) else { return nil }
+
         if let fromIdx = words.firstIndex(of: "from"), fromIdx + 1 < words.count {
             let name = words[fromIdx + 1].capitalized
             let dto = createDTO(party: name, amount: amount, direction: .borrowed, originalText: originalText)
@@ -146,12 +148,12 @@ public final class ParserService: Sendable {
     
     private func parsePaid(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
         guard let paidIdx = words.firstIndex(of: "paid") else { return nil }
-        
+
         // "[name] paid [amount]" - partial payment (creates counter-transaction)
-        // Pattern: "john paid 50" or "john paid 50 toward debt"
+        // Pattern: "john paid 50" or "john paid 2 notes"
         if paidIdx > 0 {
             let name = words[paidIdx - 1].capitalized
-            if paidIdx + 1 < words.count, let amount = parseAmount(words[paidIdx + 1]) {
+            if paidIdx + 1 < words.count, let amount = parseAmountFromWords(words, startingAt: paidIdx + 1) {
                 // Create partial payment - direction .borrowed means they paid us (reduces debt)
                 let dto = TransactionDTO(
                     party: name,
@@ -166,12 +168,12 @@ public final class ParserService: Sendable {
             // Just "[name] paid" without amount - settle all
             return .success(.settle(name))
         }
-        
+
         // "paid [name] [amount]" - partial payment
         if paidIdx + 1 < words.count {
             let name = words[paidIdx + 1].capitalized
             // Check if there's an amount after name
-            if paidIdx + 2 < words.count, let amount = parseAmount(words[paidIdx + 2]) {
+            if paidIdx + 2 < words.count, let amount = parseAmountFromWords(words, startingAt: paidIdx + 2) {
                 let dto = TransactionDTO(
                     party: name,
                     amount: amount,
@@ -185,15 +187,75 @@ public final class ParserService: Sendable {
             // Just "paid [name]" - settle all
             return .success(.settle(name))
         }
-        
+
         return nil
     }
     
     // MARK: - Amount Parsing
-    
+
+    /// Abbreviations for amount parsing (e.g., "note" = $100)
+    private static let defaultAbbreviations: [String: Decimal] = [
+        "note": 100,
+        "k": 1000,
+        "point": 1,
+        "half": 50,
+        "quarter": 25,
+        "dime": 10,
+        "nickel": 5,
+        "buck": 1
+    ]
+
+    /// Try to parse amount from words array, checking two-word patterns first ("2 notes"), then single word
+    private func parseAmountFromWords(_ words: [String], startingAt idx: Int) -> Decimal? {
+        guard idx < words.count else { return nil }
+
+        // Try two-word pattern first: "2 notes", "3 bucks", etc.
+        if idx + 1 < words.count {
+            let numStr = words[idx]
+            let unitStr = words[idx + 1].lowercased()
+
+            // Check if first word is a number and second is an abbreviation
+            if let multiplier = Decimal(string: numStr) {
+                // Strip trailing 's' for plural forms
+                let stripped = unitStr.replacingOccurrences(of: "s$", with: "", options: .regularExpression)
+                if let value = Self.defaultAbbreviations[stripped] {
+                    return multiplier * value
+                }
+            }
+        }
+
+        // Fall back to single-word parsing
+        return parseAmount(words[idx])
+    }
+
     private func parseAmount(_ token: String) -> Decimal? {
+        let lower = token.lowercased()
+
+        // Try direct number first
         let cleaned = token.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
-        return Decimal(string: cleaned)
+        if let direct = Decimal(string: cleaned), !cleaned.isEmpty {
+            return direct
+        }
+
+        // Check abbreviations with multiplier (e.g., "2notes", "3k")
+        for (abbr, value) in Self.defaultAbbreviations {
+            // Pattern: "2notes" or "2 notes"
+            if lower.hasSuffix(abbr) || lower.hasSuffix(abbr + "s") {
+                let suffix = lower.hasSuffix(abbr + "s") ? abbr + "s" : abbr
+                let numPart = String(lower.dropLast(suffix.count))
+                if let multiplier = Decimal(string: numPart.trimmingCharacters(in: .whitespaces)) {
+                    return multiplier * value
+                }
+            }
+        }
+
+        // Check direct abbreviation match
+        let stripped = lower.replacingOccurrences(of: "s$", with: "", options: .regularExpression)
+        if let value = Self.defaultAbbreviations[stripped] {
+            return value
+        }
+
+        return nil
     }
     
     // MARK: - Modifier Extraction
@@ -202,10 +264,27 @@ public final class ParserService: Sendable {
     private func extractDueDate(from text: String) -> Date? {
         let lower = text.lowercased()
         
-        // Pattern: "due X days/weeks"
-        if let range = lower.range(of: #"due\s+(\d+)\s*(day|week|month)s?"#, options: .regularExpression) {
+        // Pattern: "due X days/weeks" or "due in X days/hours/weeks"
+        if let range = lower.range(of: #"due\s+(?:in\s+)?(\d+)\s*(hour|day|week|month)s?"#, options: .regularExpression) {
             let match = String(lower[range])
             let parts = match.components(separatedBy: .whitespaces)
+            // Handle "due in X" format - find the number and unit
+            let numPattern = #"(\d+)\s*(hour|day|week|month)"#
+            if let numRange = match.range(of: numPattern, options: .regularExpression) {
+                let numMatch = String(match[numRange])
+                let numParts = numMatch.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                if numParts.count >= 2, let num = Int(numParts[0]) {
+                    let unit = numParts[1]
+                    if unit.hasPrefix("hour") {
+                        return Calendar.current.date(byAdding: .hour, value: num, to: Date())
+                    }
+                    var days = num
+                    if unit.hasPrefix("week") { days = num * 7 }
+                    if unit.hasPrefix("month") { days = num * 30 }
+                    return Calendar.current.date(byAdding: .day, value: days, to: Date())
+                }
+            }
+            // Fallback to old parsing for backwards compatibility
             if parts.count >= 3, let num = Int(parts[1]) {
                 let unit = parts[2]
                 var days = num

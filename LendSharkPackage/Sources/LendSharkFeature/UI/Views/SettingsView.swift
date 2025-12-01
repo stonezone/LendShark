@@ -82,6 +82,92 @@ public struct SettingsView: View {
                 Text("Display")
             }
             
+            // Loan Defaults Section
+            Section {
+                HStack {
+                    Text("Weekly Interest Rate")
+                        .foregroundColor(.inkBlack)
+                        .font(.system(.body, design: .monospaced))
+                    Spacer()
+                    Stepper("\(settingsService.defaultInterestRate)%", 
+                           value: $settingsService.defaultInterestRate,
+                           in: 0...100,
+                           step: 5)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.inkBlack)
+                }
+                
+                HStack {
+                    Text("Default Loan Period")
+                        .foregroundColor(.inkBlack)
+                        .font(.system(.body, design: .monospaced))
+                    Spacer()
+                    Stepper("\(settingsService.defaultLoanDuration) days", 
+                           value: $settingsService.defaultLoanDuration,
+                           in: 1...90,
+                           step: 7)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.inkBlack)
+                }
+            } header: {
+                Text("LOAN DEFAULTS")
+                    .font(.system(.caption, design: .monospaced))
+            } footer: {
+                Text("These values are used when creating new loans")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.pencilGray)
+            }
+            
+            // Quick Add Section
+            Section {
+                Toggle("Show Frequent Borrowers", isOn: $settingsService.showFrequentBorrowers)
+                    .tint(.inkBlack)
+                    .font(.system(.body, design: .monospaced))
+                
+                Toggle("Enable Tap-to-Build", isOn: $settingsService.enableTapToBuild)
+                    .tint(.inkBlack)
+                    .font(.system(.body, design: .monospaced))
+            } header: {
+                Text("QUICK ADD")
+                    .font(.system(.caption, design: .monospaced))
+            } footer: {
+                Text("Customize quick add interface behavior")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.pencilGray)
+            }
+            
+            // Shortcuts Section
+            Section {
+                if settingsService.abbreviations.isEmpty {
+                    Text("No shortcuts configured")
+                        .foregroundColor(.pencilGray)
+                        .font(.system(.body, design: .monospaced))
+                        .italic()
+                } else {
+                    ForEach(Array(settingsService.abbreviations.sorted(by: { $0.key < $1.key })), id: \.key) { key, value in
+                        HStack {
+                            Text(key)
+                                .foregroundColor(.inkBlack)
+                                .font(.system(.body, design: .monospaced, weight: .bold))
+                            Text("=")
+                                .foregroundColor(.pencilGray)
+                                .font(.system(.body, design: .monospaced))
+                            Spacer()
+                            Text(settingsService.currencySymbol + "\(value)")
+                                .foregroundColor(.cashGreen)
+                                .font(.system(.body, design: .monospaced, weight: .bold))
+                        }
+                    }
+                }
+            } header: {
+                Text("SHORTCUTS")
+                    .font(.system(.caption, design: .monospaced))
+            } footer: {
+                Text("Quick amount shortcuts for common loans")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.pencilGray)
+            }
+            
             // Privacy Settings Section
             Section {
 Toggle("Crash Reporting", isOn: $settingsService.crashReportingEnabled)

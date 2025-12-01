@@ -14,6 +14,7 @@ struct DebtorDetailView: View {
     @State private var showingEditSheet = false
     @State private var showingPartialPayment = false
     @State private var partialAmount = ""
+    @FocusState private var isPartialAmountFocused: Bool
     
     init(personName: String) {
         self.personName = personName
@@ -54,6 +55,9 @@ struct DebtorDetailView: View {
     var body: some View {
         ZStack {
             RuledLinesBackground()
+                .onTapGesture {
+                    isPartialAmountFocused = false
+                }
             
             VStack(alignment: .leading, spacing: 0) {
                 // Header
@@ -89,6 +93,7 @@ struct DebtorDetailView: View {
         }
         .alert("PARTIAL PAYMENT", isPresented: $showingPartialPayment) {
             TextField("Amount", text: $partialAmount)
+                .keyboardType(.decimalPad)
             Button("RECORD") {
                 recordPartialPayment()
             }
@@ -211,6 +216,7 @@ struct DebtorDetailView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.immediately)
     }
     
     // MARK: - Actions

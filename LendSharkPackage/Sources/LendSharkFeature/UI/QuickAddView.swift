@@ -1,13 +1,19 @@
 import SwiftUI
 import CoreData
 
-/// Quick Add Debt - single field, simple parser.
+/// Quick Add Debt - single field, simple parser + tap-to-build UI
 public struct QuickAddView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject private var settings: SettingsService
     @State private var inputText = ""
     @State private var showError = false
     @State private var errorMessage = ""
     @FocusState private var isInputFocused: Bool
+
+    // Tap-to-build state
+    @State private var detectedName: String?
+    @State private var selectedDirection: TransactionDTO.TransactionDirection?
+    @State private var selectedAmount: Decimal?
 
     public init() {}
 
@@ -29,6 +35,12 @@ public struct QuickAddView: View {
                     Rectangle().frame(height: 1).foregroundColor(.inkBlack).padding(.top, 2)
                 }
                 .padding(.bottom, 24)
+                
+                // FREQUENT BORROWERS (if enabled)
+                if settings.showFrequentBorrowers {
+                    frequentBorrowersSection
+                        .padding(.bottom, 16)
+                }
 
                 // Input field with pencil-style underline
                 VStack(alignment: .leading, spacing: 8) {
@@ -43,6 +55,9 @@ public struct QuickAddView: View {
                         .textFieldStyle(.plain)
                         .padding(.vertical, 12)
                         .focused($isInputFocused)
+                        .onChange(of: inputText) { newValue in
+                            detectNameInInput(newValue)
+                        }
                         .onSubmit {
                             add()
                             isInputFocused = false
@@ -54,6 +69,12 @@ public struct QuickAddView: View {
                         .foregroundColor(.inkBlack.opacity(0.7))
                 }
                 .padding(.bottom, 20)
+                
+                // TAP-TO-BUILD UI (if enabled)
+                if settings.enableTapToBuild && detectedName != nil {
+                    tapToBuildSection
+                        .padding(.bottom, 20)
+                }
 
                 // Preview with stamp styling
                 if !previewText.isEmpty {
@@ -124,6 +145,175 @@ public struct QuickAddView: View {
         }
     }
     
+    // MARK: - Frequent Borrowers Section
+    
+    @ViewBuilder
+    private var frequentBorrowersSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("FREQUENT:")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(.pencilGray)
+                .tracking(1)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(frequentBorrowers, id: \.name) { borrower in
+                        Button(action: {
+                            inputText = borrower.name.lowercased()
+                            detectedName = borrower.name.lowercased()
+                        }) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(borrower.name.uppercased())
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.inkBlack)
+                                Text("\(borrower.count)x")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.pencilGray)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.inkBlack.opacity(0.05))
+                            .overlay(
+                                Rectangle()
+                                    .stroke(Color.inkBlack.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Tap-to-Build Section
+    
+    @ViewBuilder
+    private var tapToBuildSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Direction selection
+            if selectedDirection == nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("DIRECTION:")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.pencilGray)
+                        .tracking(1)
+                    
+                    HStack(spacing: 8) {
+                        tapButton("OWES ME", color: .bloodRed) {
+                            selectedDirection = .lent
+                            inputText = "\(detectedName ?? "") owes"
+                        }
+                        tapButton("I OWE", color: .cashGreen) {
+                            selectedDirection = .borrowed
+                            inputText = "i owe \(detectedName ?? "")"
+                        }
+                    }
+                }
+            }
+            
+            // Amount quick picks (after direction selected)
+            if selectedDirection != nil && selectedAmount == nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("AMOUNT:")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.pencilGray)
+                        .tracking(1)
+                    
+                    HStack(spacing: 8) {
+                        tapButton("$20") {
+                            selectedAmount = 20
+                            appendToInput("20")
+                        }
+                        tapButton("$50") {
+                            selectedAmount = 50
+                            appendToInput("50")
+                        }
+                        tapButton("$100") {
+                            selectedAmount = 100
+                            appendToInput("100")
+                        }
+                        tapButton("CUSTOM") {
+                            isInputFocused = true
+                        }
+                    }
+                }
+            }
+            
+            // Condition buttons (after amount)
+            if selectedAmount != nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("CONDITION:")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.pencilGray)
+                        .tracking(1)
+                    
+                    HStack(spacing: 8) {
+                        tapButton("10%") {
+                            appendToInput("at 10%")
+                        }
+                        tapButton("DUE 1WK") {
+                            appendToInput("due 1 week")
+                        }
+                        tapButton("DUE 2WK") {
+                            appendToInput("due 2 weeks")
+                        }
+                        tapButton("DONE", color: .cashGreen) {
+                            isInputFocused = false
+                        }
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.paperYellow.opacity(0.3))
+        .overlay(
+            Rectangle()
+                .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
+                .foregroundColor(.inkBlack.opacity(0.2))
+        )
+    }
+    
+    private func tapButton(_ label: String, color: Color = .inkBlack, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(color)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.paperYellow)
+                .overlay(
+                    Rectangle()
+                        .stroke(color.opacity(0.5), lineWidth: 1)
+                )
+        }
+    }
+    
+    // MARK: - Computed Properties
+    
+    private var frequentBorrowers: [(name: String, count: Int)] {
+        let request: NSFetchRequest<Transaction> = Transaction.fetchRequest()
+        request.predicate = NSPredicate(format: "settled == false AND party != nil")
+        
+        do {
+            let transactions = try viewContext.fetch(request)
+            
+            // Group by party and count
+            var counts: [String: Int] = [:]
+            for transaction in transactions {
+                if let party = transaction.party {
+                    counts[party, default: 0] += 1
+                }
+            }
+            
+            // Sort by count and take top 5
+            return counts
+                .sorted { $0.value > $1.value }
+                .prefix(5)
+                .map { (name: $0.key, count: $0.value) }
+        } catch {
+            return []
+        }
+    }
+    
     private var previewText: String {
         let parser = ParserService()
         switch parser.parse(inputText) {
@@ -163,13 +353,45 @@ public struct QuickAddView: View {
         }
     }
     
+    // MARK: - Helper Methods
+    
+    private func detectNameInInput(_ input: String) {
+        // Simple name detection - first word before "owes" or after "i owe"
+        let lower = input.lowercased().trimmingCharacters(in: .whitespaces)
+        
+        if lower.isEmpty {
+            detectedName = nil
+            selectedDirection = nil
+            selectedAmount = nil
+            return
+        }
+        
+        // Pattern: "name owes" or "i owe name"
+        let words = lower.split(separator: " ")
+        if words.count >= 1 && !words[0].starts(with: "i") {
+            detectedName = String(words[0])
+        } else if words.count >= 3 && words[0] == "i" && words[1] == "owe" {
+            detectedName = String(words[2])
+        } else if words.count == 1 {
+            // Just a name entered
+            detectedName = String(words[0])
+        }
+    }
+    
+    private func appendToInput(_ text: String) {
+        if inputText.hasSuffix(" ") {
+            inputText += text
+        } else {
+            inputText += " " + text
+        }
+    }
+    
     private func add() {
         let parser = ParserService()
         let result = parser.parse(inputText)
         
         switch result {
         case .failure(let error):
-            // Stay in character but keep it clear.
             errorMessage = error.localizedDescription
             showError = true
         case .success(let action):
@@ -191,7 +413,12 @@ public struct QuickAddView: View {
                 case .settle(let name):
                     try Transaction.settleAll(with: name, in: viewContext)
                 }
+                
+                // Reset state
                 inputText = ""
+                detectedName = nil
+                selectedDirection = nil
+                selectedAmount = nil
                 isInputFocused = false
             } catch {
                 errorMessage = error.localizedDescription

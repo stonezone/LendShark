@@ -15,6 +15,11 @@ struct EditTransactionView: View {
     @State private var dueDate: Date
     @State private var hasDueDate: Bool
     @State private var direction: Int16
+    @FocusState private var focusedField: Field?
+    
+    private enum Field: Hashable {
+        case party, amount, interestRate, notes
+    }
     
     init(transaction: Transaction, onDismiss: @escaping () -> Void) {
         self.transaction = transaction
@@ -37,8 +42,17 @@ struct EditTransactionView: View {
         NavigationStack {
             ZStack {
                 RuledLinesBackground()
+                    .onTapGesture {
+                        focusedField = nil
+                    }
 
                 ScrollView {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            focusedField = nil
+                        }
+                        .frame(height: 0)
                     VStack(alignment: .leading, spacing: 0) {
                         // Header
                         VStack(alignment: .leading, spacing: 4) {
@@ -57,6 +71,10 @@ struct EditTransactionView: View {
                                 .font(.system(size: 17, weight: .semibold, design: .monospaced))
                                 .foregroundColor(.inkBlack)
                                 .autocapitalization(.words)
+                                .focused($focusedField, equals: .party)
+                                .onSubmit {
+                                    focusedField = .amount
+                                }
                         }
 
                         // Amount
@@ -69,6 +87,7 @@ struct EditTransactionView: View {
                                     .font(.system(size: 24, weight: .black, design: .monospaced))
                                     .foregroundColor(.inkBlack)
                                     .keyboardType(.decimalPad)
+                                    .focused($focusedField, equals: .amount)
                             }
                         }
 
@@ -88,6 +107,7 @@ struct EditTransactionView: View {
                                     .foregroundColor(.bloodRed)
                                     .keyboardType(.numberPad)
                                     .frame(width: 60)
+                                    .focused($focusedField, equals: .interestRate)
                                 Text("%")
                                     .font(.system(size: 16, weight: .bold, design: .monospaced))
                                     .foregroundColor(.pencilGray)
@@ -119,12 +139,17 @@ struct EditTransactionView: View {
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(.inkBlack)
                                 .lineLimit(2...4)
+                                .focused($focusedField, equals: .notes)
+                                .onSubmit {
+                                    focusedField = nil
+                                }
                         }
 
                         Spacer(minLength: 40)
                     }
                     .padding(20)
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

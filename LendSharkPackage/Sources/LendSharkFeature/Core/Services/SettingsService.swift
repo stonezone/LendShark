@@ -10,14 +10,25 @@ public final class SettingsService: ObservableObject {
     // MARK: - General Settings
     @AppStorage("enableNotifications") public var enableNotifications = true
     @AppStorage("autoSettle") public var autoSettle = false
-    @AppStorage("darkMode") public var darkMode = true
+    @AppStorage("darkMode") public var darkMode = false  // Light mode (paper) by default
     @AppStorage("biometricAuth") public var biometricAuth = false
     @AppStorage("enableiCloudSync") public var enableiCloudSync = true
-    
+
+    // MARK: - Loan Shark Defaults
+    @AppStorage("defaultInterestRate") public var defaultInterestRate = 10  // Weekly %
+    @AppStorage("defaultLoanDuration") public var defaultLoanDuration = 14  // Days
+    @AppStorage("showFrequentBorrowers") public var showFrequentBorrowers = true
+    @AppStorage("enableTapToBuild") public var enableTapToBuild = true
+
     // MARK: - Display Settings
     @AppStorage("currencySymbol") public var currencySymbol = "$"
-    @AppStorage("exportFormat") public var exportFormat = "CSV"
+    @AppStorage("exportFormat") public var exportFormat = "PDF"  // Loan sharks prefer PDF
     @AppStorage("notificationFrequency") public var notificationFrequency = "Daily"
+
+    // MARK: - Abbreviations (stored as JSON)
+    @AppStorage("abbreviationsJSON") private var abbreviationsJSON = """
+    {"note":"100","k":"1000","point":"1","half":"50","quarter":"25","dime":"10","nickel":"5","buck":"1"}
+    """
     
     // MARK: - Privacy Settings
     @AppStorage("analyticsEnabled") public var analyticsEnabled = false
@@ -26,6 +37,75 @@ public final class SettingsService: ObservableObject {
     // MARK: - Initialization
     /// Public initializer - no longer singleton
     public init() {}
+
+    // MARK: - Abbreviations Access
+    public var abbreviations: [String: Decimal] {
+        get {
+            guard let data = abbreviationsJSON.data(using: .utf8),
+                  let dict = try? JSONDecoder().decode([String: String].self, from: data) else {
+                return [:]
+            }
+            var result: [String: Decimal] = [:]
+            for (key, value) in dict {
+                if let decimal = Decimal(string: value) {
+                    result[key.lowercased()] = decimal
+                }
+            }
+            return result
+        }
+        set {
+            var stringDict: [String: String] = [:]
+            for (key, value) in newValue {
+                stringDict[key.lowercased()] = "\(value)"
+            }
+            if let data = try? JSONEncoder().encode(stringDict),
+               let json = String(data: data, encoding: .utf8) {
+                abbreviationsJSON = json
+            }
+        }
+    }
+
+    public func addAbbreviation(_ key: String, value: Decimal) {
+        var current = abbreviations
+        current[key.lowercased()] = value
+        abbreviations = current
+    }
+
+    public func removeAbbreviation(_ key: String) {
+        var current = abbreviations
+        current.removeValue(forKey: key.lowercased())
+        abbreviations = current
+    }
+
+    /// Expand abbreviations in amount string (e.g., "2 notes" -> 200)
+    public func expandAbbreviation(_ input: String) -> Decimal? {
+        let lower = input.lowercased().trimmingCharacters(in: .whitespaces)
+
+        // Check for multiplier pattern: "2 notes", "3k", etc.
+        let parts = lower.split(separator: " ")
+        if parts.count == 2,
+           let multiplier = Decimal(string: String(parts[0])),
+           let baseValue = abbreviations[String(parts[1]).replacingOccurrences(of: "s", with: "")] {
+            return multiplier * baseValue
+        }
+
+        // Check for suffix pattern: "2notes", "3k"
+        for (abbr, value) in abbreviations {
+            if lower.hasSuffix(abbr) {
+                let numPart = lower.dropLast(abbr.count)
+                if let multiplier = Decimal(string: String(numPart)) {
+                    return multiplier * value
+                }
+            }
+        }
+
+        // Check direct match
+        if let value = abbreviations[lower] {
+            return value
+        }
+
+        return nil
+    }
     
     // MARK: - Available Options
     public var availableCurrencies: [String] {
@@ -71,14 +151,22 @@ public final class SettingsService: ObservableObject {
     public func resetToDefaults() {
         enableNotifications = true
         autoSettle = false
-        darkMode = true
+        darkMode = false
         biometricAuth = false
         enableiCloudSync = true
         currencySymbol = "$"
-        exportFormat = "CSV"
+        exportFormat = "PDF"
         notificationFrequency = "Daily"
         analyticsEnabled = false
         crashReportingEnabled = true
+        // Loan shark defaults
+        defaultInterestRate = 10
+        defaultLoanDuration = 14
+        showFrequentBorrowers = true
+        enableTapToBuild = true
+        abbreviationsJSON = """
+        {"note":"100","k":"1000","point":"1","half":"50","quarter":"25","dime":"10","nickel":"5","buck":"1"}
+        """
     }
     
     public func getAppVersion() -> String {
