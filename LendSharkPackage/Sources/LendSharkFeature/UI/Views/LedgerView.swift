@@ -8,61 +8,90 @@ struct LedgerView: View {
         sortDescriptors: [NSSortDescriptor(keyPath: \Transaction.timestamp, ascending: false)],
         animation: .default
     ) private var transactions: FetchedResults<Transaction>
-    
+
     @State private var debtors: [DebtLedger.DebtorInfo] = []
-    
+
     var body: some View {
         ZStack {
             // Aged paper background with ruled lines
             RuledLinesBackground()
-            
+
             VStack(alignment: .leading, spacing: 0) {
-                // Header - like notebook tab
-                HStack {
-                    Text("THE LEDGER")
-                        .font(.system(size: 24, weight: .bold, design: .monospaced))
-                        .foregroundColor(.inkBlack)
-                    Spacer()
-                    Text(Date.now.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundColor(.pencilGray)
+                // Header - like notebook tab with underline
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("THE LEDGER")
+                            .font(.system(size: 28, weight: .black, design: .monospaced))
+                            .foregroundColor(.inkBlack)
+                            .tracking(2)
+                        Spacer()
+                        Text(Date.now.formatted(date: .abbreviated, time: .omitted).uppercased())
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(.pencilGray)
+                    }
+                    // Double underline like old ledger books
+                    Rectangle().frame(height: 2).foregroundColor(.inkBlack)
+                    Rectangle().frame(height: 1).foregroundColor(.inkBlack).padding(.top, 2)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-                .padding(.bottom, 8)
-                
-                // Total outstanding
+                .padding(.bottom, 12)
+
+                // Total outstanding - stamped look
                 if totalOutstanding > 0 {
-                    HStack {
-                        Text("ON THE STREET:")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(.pencilGray)
-                        Spacer()
-                        Text(formatCurrency(totalOutstanding))
-                            .font(.system(size: 18, weight: .black, design: .monospaced))
+                    HStack(alignment: .center) {
+                        Text("ON THE STREET")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
                             .foregroundColor(.bloodRed)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-                }
-                
-                // Divider line (like ruling)
-                Rectangle()
-                    .frame(height: 2)
-                    .foregroundColor(.inkBlack)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
-                
-                if debtors.isEmpty {
-                    // Empty state
-                    VStack(spacing: 16) {
-                        Text("LEDGER IS CLEAN")
-                            .font(.system(size: 18, weight: .medium, design: .monospaced))
-                            .foregroundColor(.pencilGray)
-                        
-                        Text("Everyone's square. For now.")
+                            .tracking(1)
+
+                        // Dotted leader
+                        Text(String(repeating: "·", count: 8))
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundColor(.pencilGray)
+
+                        Spacer()
+
+                        Text(formatCurrency(totalOutstanding))
+                            .font(.system(size: 22, weight: .black, design: .monospaced))
+                            .foregroundColor(.bloodRed)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.bloodRed.opacity(0.08))
+                    .overlay(Rectangle().stroke(Color.bloodRed, lineWidth: 1))
+                    .rotationEffect(.degrees(-0.5)) // Slight tilt like a stamp
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+                }
+
+                // Divider line (like ruling)
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.inkBlack.opacity(0.3))
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+                
+                if debtors.isEmpty {
+                    // Empty state - ominous calm
+                    VStack(spacing: 20) {
+                        Text("—")
+                            .font(.system(size: 48, weight: .ultraLight, design: .monospaced))
+                            .foregroundColor(.pencilGray.opacity(0.4))
+
+                        Text("LEDGER IS CLEAN")
+                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .tracking(3)
+                            .foregroundColor(.pencilGray)
+
+                        Text("Everyone's square.")
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(.pencilGray.opacity(0.7))
+
+                        Text("For now.")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(.pencilGray.opacity(0.5))
+                            .italic()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -90,30 +119,54 @@ struct LedgerView: View {
         }
     }
     
-    /// Single debtor row - stark and direct
+    /// Single debtor row - stark and direct with dotted leaders
     private func debtorRow(_ debtor: DebtLedger.DebtorInfo) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            // Name and status (left)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(debtor.name)
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
+        HStack(alignment: .center, spacing: 0) {
+            // Left side - Name with chevron hint
+            HStack(spacing: 6) {
+                Text(debtor.name.uppercased())
+                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
                     .foregroundColor(.inkBlack)
                     .lineLimit(1)
-                
-                statusText(for: debtor)
+
+                // Subtle chevron indicating tappable
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.pencilGray.opacity(0.5))
             }
-            
-            Spacer()
-            
-            // Amount (right aligned)
-            VStack(alignment: .trailing, spacing: 2) {
+
+            // Dotted leader line (classic ledger style)
+            GeometryReader { geo in
+                let dotCount = Int(geo.size.width / 8)
+                Text(String(repeating: "·", count: max(3, dotCount)))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.pencilGray.opacity(0.6))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(height: 16)
+            .padding(.horizontal, 4)
+
+            // Right side - Amount and stamp
+            VStack(alignment: .trailing, spacing: 3) {
                 amountText(for: debtor)
                 stampText(for: debtor)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .background(debtor.isOverdue ? Color.bloodRed.opacity(0.05) : Color.clear)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .background(
+            debtor.isOverdue
+                ? Color.bloodRed.opacity(0.06)
+                : Color.clear
+        )
+        // Bottom border like ledger entry line
+        .overlay(
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(.inkBlack.opacity(0.15)),
+            alignment: .bottom
+        )
     }
     
     /// Amount display with proper coloring
@@ -169,31 +222,38 @@ struct LedgerView: View {
         }
     }
 
-    /// Ink-style stamps for overall status
+    /// Ink-style stamps for overall status - authentic rubber stamp look
     private func stampText(for debtor: DebtLedger.DebtorInfo) -> some View {
         let text: String
         let color: Color
+        let rotation: Double
 
         if debtor.isOverdue {
             text = "PAST DUE"
             color = .bloodRed
+            rotation = -2.5
         } else if debtor.iOwe {
             text = "I OWE"
             color = .cashGreen
+            rotation = 1.5
         } else {
-            text = "OWES ME"
+            text = "OWES"
             color = .inkBlack
+            rotation = -1.0
         }
 
         return Text(text)
-            .font(.system(size: 11, weight: .black, design: .monospaced))
-            .foregroundColor(color)
-            .padding(.horizontal, 6)
+            .font(.system(size: 9, weight: .black, design: .monospaced))
+            .tracking(1)
+            .foregroundColor(color.opacity(0.85))
+            .padding(.horizontal, 5)
             .padding(.vertical, 2)
+            .background(color.opacity(0.08))
             .overlay(
                 Rectangle()
-                    .stroke(color, lineWidth: 1)
+                    .stroke(color.opacity(0.7), lineWidth: 1.5)
             )
+            .rotationEffect(.degrees(rotation))
     }
     
     /// Calculate number of dots to fill space (approximation)

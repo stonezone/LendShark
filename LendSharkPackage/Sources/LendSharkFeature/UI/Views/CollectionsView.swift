@@ -61,125 +61,176 @@ struct CollectionsView: View {
     
     // MARK: - Header
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
                 Text("COLLECTIONS")
                     .font(.system(size: 28, weight: .black, design: .monospaced))
                     .foregroundColor(.bloodRed)
+                    .tracking(2)
                 Spacer()
+                // Stamp-style badge
                 Text("PAST DUE")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .tracking(1)
                     .foregroundColor(.bloodRed)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .overlay(Rectangle().stroke(Color.bloodRed, lineWidth: 1.5))
+                    .rotationEffect(.degrees(-3))
             }
+            // Double underline in red
             Rectangle().frame(height: 3).foregroundColor(.bloodRed)
+            Rectangle().frame(height: 1).foregroundColor(.bloodRed.opacity(0.5)).padding(.top, 2)
         }
     }
     
     // MARK: - Overdue Section
     private var overdueSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
+            // Urgent warning banner
+            HStack(spacing: 8) {
                 Text("!")
-                    .font(.system(size: 24, weight: .black, design: .monospaced))
-                    .foregroundColor(.bloodRed)
-                Text("IMMEDIATE ACTION REQUIRED")
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .font(.system(size: 20, weight: .black, design: .monospaced))
+                    .foregroundColor(.paperYellow)
+                    .frame(width: 28, height: 28)
+                    .background(Color.bloodRed)
+
+                Text("ACTION REQUIRED")
+                    .font(.system(size: 14, weight: .black, design: .monospaced))
+                    .tracking(2)
                     .foregroundColor(.bloodRed)
             }
-            .padding(12)
+            .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.bloodRed.opacity(0.1))
-            .overlay(Rectangle().stroke(Color.bloodRed, lineWidth: 2))
-            
+            .background(Color.bloodRed.opacity(0.08))
+            .overlay(
+                Rectangle()
+                    .stroke(Color.bloodRed, lineWidth: 2)
+            )
+            .rotationEffect(.degrees(-0.3))
+
             ForEach(overdueDebtors, id: \.name) { debtor in
                 overdueDebtorRow(debtor)
             }
         }
     }
-    
+
     // MARK: - Empty State
     private var emptyStateSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 24) {
+            // Checkmark stamp
             Text("✓")
-                .font(.system(size: 48, weight: .black, design: .monospaced))
+                .font(.system(size: 36, weight: .black, design: .monospaced))
                 .foregroundColor(.cashGreen)
-            Text("ALL DEBTS COLLECTED")
-                .font(.system(size: 20, weight: .bold, design: .monospaced))
-                .foregroundColor(.cashGreen)
-            Text("No one ducking you right now.")
-                .font(.system(size: 16, design: .monospaced))
-                .foregroundColor(.pencilGray)
+                .padding(16)
+                .overlay(
+                    Circle()
+                        .stroke(Color.cashGreen, lineWidth: 3)
+                )
+                .rotationEffect(.degrees(-5))
+
+            VStack(spacing: 8) {
+                Text("ALL CLEAR")
+                    .font(.system(size: 18, weight: .black, design: .monospaced))
+                    .tracking(3)
+                    .foregroundColor(.cashGreen)
+
+                Text("No one ducking you.")
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(.pencilGray)
+
+                Text("Yet.")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.pencilGray.opacity(0.6))
+                    .italic()
+                    .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(40)
+        .padding(48)
     }
     
     // MARK: - Debtor Row
     private func overdueDebtorRow(_ debtor: DebtLedger.DebtorInfo) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(debtor.name)
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    Text(debtor.name.uppercased())
+                        .font(.system(size: 17, weight: .bold, design: .monospaced))
                         .foregroundColor(.bloodRed)
-                    
-                    Text("\(formatAmount(debtor.totalOwed)) • \(debtor.daysOverdue) DAYS")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(.bloodRed)
+
+                    HStack(spacing: 4) {
+                        Text(formatAmount(debtor.totalOwed))
+                            .font(.system(size: 20, weight: .black, design: .monospaced))
+                        Text("•")
+                            .foregroundColor(.bloodRed.opacity(0.5))
+                        Text("\(debtor.daysOverdue)d")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    }
+                    .foregroundColor(.bloodRed)
                 }
-                
+
                 Spacer()
 
-                // Stamp showing escalation level
+                // Escalation stamp with rotation
                 Text(escalationLevel(for: debtor.daysOverdue))
-                    .font(.system(size: 12, weight: .black, design: .monospaced))
-                    .foregroundColor(.bloodRed)
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .tracking(1)
+                    .foregroundColor(.bloodRed.opacity(0.8))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .overlay(
-                        Rectangle()
-                            .stroke(Color.bloodRed, lineWidth: 1)
-                    )
+                    .background(Color.bloodRed.opacity(0.1))
+                    .overlay(Rectangle().stroke(Color.bloodRed.opacity(0.6), lineWidth: 1.5))
+                    .rotationEffect(.degrees(-4))
             }
-            
-            // Action buttons - sharp edges
-            HStack(spacing: 12) {
+
+            // Action buttons - stark and direct
+            HStack(spacing: 10) {
                 Button(action: { sendReminder(to: debtor) }) {
-                    Text("REMIND")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(.paperYellow)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.bloodRed)
+                    HStack(spacing: 4) {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 10))
+                        Text("REMIND")
+                    }
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .foregroundColor(.paperYellow)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.bloodRed)
                 }
-                
+
                 Button(action: {
                     selectedDebtor = debtor
                     showingSettlement = true
                 }) {
-                    Text("SETTLED")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(.paperYellow)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.cashGreen)
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("PAID")
+                    }
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .foregroundColor(.paperYellow)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.cashGreen)
                 }
-                
+
+                Spacer()
+
                 Button(action: { writeOffDebt(for: debtor) }) {
-                    Text("WRITE OFF")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(.paperYellow)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.pencilGray)
+                    Text("×")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(.pencilGray)
+                        .frame(width: 32, height: 32)
+                        .overlay(Rectangle().stroke(Color.pencilGray.opacity(0.5), lineWidth: 1))
                 }
             }
         }
-        .padding(16)
-        .background(Color.bloodRed.opacity(0.05))
+        .padding(14)
+        .background(Color.bloodRed.opacity(0.04))
         .overlay(
             Rectangle()
-                .stroke(Color.bloodRed.opacity(0.3), lineWidth: 1)
+                .stroke(Color.bloodRed.opacity(0.2), lineWidth: 1)
         )
     }
     

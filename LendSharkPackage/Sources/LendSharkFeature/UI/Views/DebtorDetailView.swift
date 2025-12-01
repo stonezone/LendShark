@@ -103,48 +103,76 @@ struct DebtorDetailView: View {
     // MARK: - Header
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("TRANSACTION HISTORY")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(.pencilGray)
-            
-            Rectangle()
-                .frame(height: 2)
-                .foregroundColor(.inkBlack)
+            HStack(alignment: .firstTextBaseline) {
+                Text("HISTORY")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundColor(.pencilGray)
+                Spacer()
+                Text("← swipe rows")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.pencilGray.opacity(0.5))
+            }
+            Rectangle().frame(height: 1).foregroundColor(.inkBlack.opacity(0.3))
         }
         .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
     }
-    
+
     // MARK: - Summary
     private var summarySection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                // Status stamp
                 Text(totalOwed >= 0 ? "OWES YOU" : "YOU OWE")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(.pencilGray)
-                
-                Text(formatCurrency(abs(totalWithInterest)))
-                    .font(.system(size: 28, weight: .black, design: .monospaced))
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .tracking(1)
                     .foregroundColor(totalOwed > 0 ? .bloodRed : .cashGreen)
-                
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .overlay(Rectangle().stroke(totalOwed > 0 ? Color.bloodRed : Color.cashGreen, lineWidth: 1))
+                    .rotationEffect(.degrees(-2))
+
+                // Big amount
+                Text(formatCurrency(abs(totalWithInterest)))
+                    .font(.system(size: 32, weight: .black, design: .monospaced))
+                    .foregroundColor(totalOwed > 0 ? .bloodRed : .cashGreen)
+
+                // Interest breakdown
                 if totalWithInterest != totalOwed && totalOwed > 0 {
                     let interest = totalWithInterest - totalOwed
-                    Text("(\(formatCurrency(totalOwed)) + \(formatCurrency(interest)) interest)")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.pencilGray)
+                    HStack(spacing: 4) {
+                        Text(formatCurrency(totalOwed))
+                            .foregroundColor(.inkBlack)
+                        Text("+")
+                            .foregroundColor(.pencilGray)
+                        Text(formatCurrency(interest))
+                            .foregroundColor(.bloodRed)
+                        Text("int")
+                            .foregroundColor(.pencilGray)
+                    }
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                 }
             }
-            
+
             Spacer()
-            
-            Text("\(transactions.filter { !$0.settled }.count) active")
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(.pencilGray)
+
+            // Active count badge
+            VStack(alignment: .trailing, spacing: 2) {
+                let activeCount = transactions.filter { !$0.settled }.count
+                Text("\(activeCount)")
+                    .font(.system(size: 24, weight: .black, design: .monospaced))
+                    .foregroundColor(.inkBlack)
+                Text("ACTIVE")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundColor(.pencilGray)
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color.bloodRed.opacity(totalOwed > 0 ? 0.05 : 0))
+        .padding(.vertical, 14)
+        .background(Color.bloodRed.opacity(totalOwed > 0 ? 0.04 : 0))
     }
     
     // MARK: - Transaction List
@@ -227,72 +255,81 @@ struct DebtorDetailView: View {
 
 struct TransactionRowView: View {
     let transaction: Transaction
-    
+
     var body: some View {
-        HStack(alignment: .top) {
-            // Left side - date and details
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: 12) {
+            // Left - Direction indicator
+            let isLent = transaction.direction == 1
+            VStack(spacing: 2) {
+                Image(systemName: isLent ? "arrow.up.right" : "arrow.down.left")
+                    .font(.system(size: 12, weight: .bold))
+                Text(isLent ? "OUT" : "IN")
+                    .font(.system(size: 8, weight: .black, design: .monospaced))
+            }
+            .foregroundColor(isLent ? .bloodRed : .cashGreen)
+            .frame(width: 32)
+
+            // Middle - Details
+            VStack(alignment: .leading, spacing: 3) {
                 // Date
                 if let date = transaction.timestamp {
-                    Text(date.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    Text(date.formatted(date: .abbreviated, time: .omitted).uppercased())
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(.pencilGray)
                 }
-                
-                // Direction indicator
-                let isLent = transaction.direction == 1
-                Text(isLent ? "LENT" : "BORROWED")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(isLent ? .bloodRed : .cashGreen)
-                
+
                 // Notes if present
                 if let notes = transaction.notes, !notes.isEmpty {
                     Text(notes)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.pencilGray)
-                        .lineLimit(2)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.inkBlack)
+                        .lineLimit(1)
                 }
-                
-                // Interest rate if present
-                if let rate = transaction.interestRate?.decimalValue, rate > 0 {
-                    let pct = NSDecimalNumber(decimal: rate * 100).intValue
-                    Text("\(pct)% weekly")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.bloodRed)
-                }
-                
-                // Due date if present
-                if let due = transaction.dueDate {
-                    let isOverdue = due < Date()
-                    Text("Due: \(due.formatted(date: .abbreviated, time: .omitted))")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(isOverdue ? .bloodRed : .pencilGray)
+
+                // Interest/Due info row
+                HStack(spacing: 8) {
+                    if let rate = transaction.interestRate?.decimalValue, rate > 0 {
+                        let pct = NSDecimalNumber(decimal: rate * 100).intValue
+                        Text("\(pct)%")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.bloodRed.opacity(0.8))
+                    }
+
+                    if let due = transaction.dueDate {
+                        let isOverdue = due < Date() && !transaction.settled
+                        Text("DUE \(due.formatted(date: .abbreviated, time: .omitted).uppercased())")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(isOverdue ? .bloodRed : .pencilGray.opacity(0.7))
+                    }
                 }
             }
-            
+
             Spacer()
-            
-            // Right side - amount and status
+
+            // Right - Amount and status
             VStack(alignment: .trailing, spacing: 4) {
                 let amount = transaction.amount?.decimalValue ?? 0
                 Text(formatCurrency(amount))
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .foregroundColor(transaction.settled ? .pencilGray : .inkBlack)
-                
+
                 if transaction.settled {
-                    Text("SETTLED")
-                        .font(.system(size: 10, weight: .black, design: .monospaced))
-                        .foregroundColor(.cashGreen)
-                        .padding(.horizontal, 6)
+                    Text("PAID")
+                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                        .tracking(1)
+                        .foregroundColor(.cashGreen.opacity(0.8))
+                        .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .overlay(Rectangle().stroke(Color.cashGreen, lineWidth: 1))
+                        .background(Color.cashGreen.opacity(0.1))
+                        .overlay(Rectangle().stroke(Color.cashGreen.opacity(0.5), lineWidth: 1))
+                        .rotationEffect(.degrees(3))
                 }
             }
         }
-        .padding(.vertical, 4)
-        .opacity(transaction.settled ? 0.6 : 1.0)
+        .padding(.vertical, 6)
+        .opacity(transaction.settled ? 0.5 : 1.0)
     }
-    
+
     private func formatCurrency(_ amount: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency

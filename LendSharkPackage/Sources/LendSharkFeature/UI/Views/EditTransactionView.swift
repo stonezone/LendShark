@@ -37,59 +37,74 @@ struct EditTransactionView: View {
         NavigationStack {
             ZStack {
                 RuledLinesBackground()
-                
+
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Header
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("EDIT ENTRY")
+                                .font(.system(size: 24, weight: .black, design: .monospaced))
+                                .tracking(2)
+                                .foregroundColor(.inkBlack)
+                            Rectangle().frame(height: 2).foregroundColor(.inkBlack)
+                            Rectangle().frame(height: 1).foregroundColor(.inkBlack).padding(.top, 2)
+                        }
+                        .padding(.bottom, 24)
+
                         // Party name
-                        fieldSection(title: "WHO") {
+                        fieldSection(title: "WHO", spacing: 24) {
                             TextField("Name", text: $party)
-                                .font(.system(size: 18, weight: .medium, design: .monospaced))
+                                .font(.system(size: 17, weight: .semibold, design: .monospaced))
                                 .foregroundColor(.inkBlack)
                                 .autocapitalization(.words)
                         }
-                        
+
                         // Amount
-                        fieldSection(title: "AMOUNT") {
-                            HStack {
+                        fieldSection(title: "AMOUNT", spacing: 24) {
+                            HStack(spacing: 4) {
                                 Text("$")
-                                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                    .font(.system(size: 24, weight: .black, design: .monospaced))
                                     .foregroundColor(.inkBlack)
                                 TextField("0.00", text: $amount)
-                                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                    .font(.system(size: 24, weight: .black, design: .monospaced))
                                     .foregroundColor(.inkBlack)
                                     .keyboardType(.decimalPad)
                             }
                         }
-                        
+
                         // Direction
-                        fieldSection(title: "DIRECTION") {
-                            HStack(spacing: 16) {
-                                directionButton(title: "THEY OWE ME", value: 1)
-                                directionButton(title: "I OWE THEM", value: -1)
+                        fieldSection(title: "DIRECTION", spacing: 24) {
+                            HStack(spacing: 12) {
+                                directionButton(title: "THEY OWE", value: 1, color: .bloodRed)
+                                directionButton(title: "I OWE", value: -1, color: .cashGreen)
                             }
                         }
-                        
+
                         // Interest rate
-                        fieldSection(title: "INTEREST (WEEKLY %)") {
-                            HStack {
+                        fieldSection(title: "INTEREST (WEEKLY)", spacing: 24) {
+                            HStack(spacing: 4) {
                                 TextField("0", text: $interestRate)
-                                    .font(.system(size: 18, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.inkBlack)
+                                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.bloodRed)
                                     .keyboardType(.numberPad)
+                                    .frame(width: 60)
                                 Text("%")
-                                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
                                     .foregroundColor(.pencilGray)
+                                Spacer()
                             }
                         }
-                        
+
                         // Due date toggle and picker
-                        fieldSection(title: "DUE DATE") {
+                        fieldSection(title: "DUE DATE", spacing: 24) {
                             VStack(alignment: .leading, spacing: 12) {
-                                Toggle("SET DUE DATE", isOn: $hasDueDate)
-                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.inkBlack)
-                                    .tint(.bloodRed)
-                                
+                                Toggle(isOn: $hasDueDate) {
+                                    Text(hasDueDate ? "DUE DATE SET" : "NO DUE DATE")
+                                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                        .foregroundColor(hasDueDate ? .bloodRed : .pencilGray)
+                                }
+                                .tint(.bloodRed)
+
                                 if hasDueDate {
                                     DatePicker("", selection: $dueDate, displayedComponents: .date)
                                         .datePickerStyle(.compact)
@@ -97,37 +112,42 @@ struct EditTransactionView: View {
                                 }
                             }
                         }
-                        
+
                         // Notes
-                        fieldSection(title: "NOTES / COLLATERAL") {
+                        fieldSection(title: "NOTES / COLLATERAL", spacing: 24) {
                             TextField("e.g. has my watch", text: $notes, axis: .vertical)
-                                .font(.system(size: 16, design: .monospaced))
+                                .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(.inkBlack)
-                                .lineLimit(3...5)
+                                .lineLimit(2...4)
                         }
-                        
+
                         Spacer(minLength: 40)
                     }
                     .padding(20)
                 }
             }
-            .navigationTitle("EDIT DEBT")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("CANCEL") {
                         onDismiss()
                     }
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundColor(.pencilGray)
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("SAVE") {
+                    Button {
                         saveChanges()
+                    } label: {
+                        Text("SAVE")
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(.paperYellow)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(isValid ? Color.inkBlack : Color.pencilGray)
                     }
-                    .font(.system(size: 14, weight: .black, design: .monospaced))
-                    .foregroundColor(.bloodRed)
                     .disabled(!isValid)
                 }
             }
@@ -135,32 +155,35 @@ struct EditTransactionView: View {
     }
     
     // MARK: - Components
-    
-    private func fieldSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+
+    private func fieldSection<Content: View>(title: String, spacing: CGFloat = 20, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(1)
                 .foregroundColor(.pencilGray)
-            
+
             content()
-            
+
             Rectangle()
                 .frame(height: 1)
-                .foregroundColor(.inkBlack.opacity(0.3))
+                .foregroundColor(.inkBlack.opacity(0.2))
         }
+        .padding(.bottom, spacing)
     }
-    
-    private func directionButton(title: String, value: Int16) -> some View {
+
+    private func directionButton(title: String, value: Int16, color: Color) -> some View {
         Button {
             direction = value
         } label: {
             Text(title)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundColor(direction == value ? .paperYellow : .inkBlack)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(direction == value ? Color.inkBlack : Color.clear)
-                .overlay(Rectangle().stroke(Color.inkBlack, lineWidth: 1))
+                .font(.system(size: 11, weight: .black, design: .monospaced))
+                .tracking(1)
+                .foregroundColor(direction == value ? .paperYellow : color)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(direction == value ? color : Color.clear)
+                .overlay(Rectangle().stroke(color, lineWidth: direction == value ? 0 : 1.5))
         }
     }
     

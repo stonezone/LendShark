@@ -8,49 +8,112 @@ public struct QuickAddView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @FocusState private var isInputFocused: Bool
-    
+
     public init() {}
-    
+
     public var body: some View {
         ZStack {
             RuledLinesBackground()
                 .onTapGesture {
                     isInputFocused = false
                 }
-            
-            VStack(alignment: .leading, spacing: 16) {
-            Text("QUICK ADD")
-                .font(.system(size: 24, weight: .bold, design: .monospaced))
-                .foregroundColor(.inkBlack)
-            
-            TextField("e.g. john owes 50", text: $inputText)
-                .font(.system(size: 18, weight: .regular, design: .monospaced))
-                .foregroundColor(.inkBlack)
-                .textFieldStyle(.plain)
-                .padding(.vertical, 8)
-                .overlay(Rectangle().frame(height: 1).foregroundColor(.inkBlack), alignment: .bottom)
-                .focused($isInputFocused)
-                .onSubmit {
-                    add()
-                    isInputFocused = false
+
+            VStack(alignment: .leading, spacing: 0) {
+                // Header with double underline
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("QUICK ADD")
+                        .font(.system(size: 28, weight: .black, design: .monospaced))
+                        .foregroundColor(.inkBlack)
+                        .tracking(2)
+                    Rectangle().frame(height: 2).foregroundColor(.inkBlack)
+                    Rectangle().frame(height: 1).foregroundColor(.inkBlack).padding(.top, 2)
                 }
-            
-            if !previewText.isEmpty {
-                Text(previewText)
-                    .font(.system(size: 14, weight: .regular, design: .monospaced))
-                    .foregroundColor(.pencilGray)
-            }
-            
-            Button(action: add) {
-                Text("ADD")
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                .padding(.bottom, 24)
+
+                // Input field with pencil-style underline
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("WRITE IT DOWN:")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.pencilGray)
+                        .tracking(1)
+
+                    TextField("john owes 50 due 2 weeks at 10%", text: $inputText)
+                        .font(.system(size: 17, weight: .medium, design: .monospaced))
+                        .foregroundColor(.inkBlack)
+                        .textFieldStyle(.plain)
+                        .padding(.vertical, 12)
+                        .focused($isInputFocused)
+                        .onSubmit {
+                            add()
+                            isInputFocused = false
+                        }
+
+                    // Pencil underline effect
+                    Rectangle()
+                        .frame(height: 2)
+                        .foregroundColor(.inkBlack.opacity(0.7))
+                }
+                .padding(.bottom, 20)
+
+                // Preview with stamp styling
+                if !previewText.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("WILL RECORD:")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(.pencilGray)
+                            .tracking(1)
+
+                        Text(previewText)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.inkBlack)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.inkBlack.opacity(0.05))
+                            .overlay(
+                                Rectangle()
+                                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 2]))
+                                    .foregroundColor(.inkBlack.opacity(0.3))
+                            )
+                    }
+                    .padding(.bottom, 24)
+                }
+
+                // Add button - bold and direct
+                Button(action: add) {
+                    HStack {
+                        Text("ADD TO LEDGER")
+                            .font(.system(size: 16, weight: .black, design: .monospaced))
+                            .tracking(1)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 14, weight: .bold))
+                    }
                     .foregroundColor(.paperYellow)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 14)
                     .background(Color.inkBlack)
-            }
-            
-            Spacer()
+                }
+                .disabled(previewText.isEmpty)
+                .opacity(previewText.isEmpty ? 0.5 : 1.0)
+
+                // Help text
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("EXAMPLES:")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.pencilGray.opacity(0.7))
+                        .padding(.top, 24)
+
+                    Group {
+                        Text("• john owes 50")
+                        Text("• mary owes 100 due 2 weeks")
+                        Text("• mike owes 200 at 10%")
+                        Text("• john paid 25")
+                        Text("• i owe frank 50")
+                    }
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.pencilGray.opacity(0.6))
+                }
+
+                Spacer()
             }
             .padding(24)
         }
