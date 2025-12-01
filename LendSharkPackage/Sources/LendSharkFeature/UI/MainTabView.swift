@@ -8,65 +8,63 @@ public struct MainTabView: View {
     
     public var body: some View {
         TabView(selection: $selectedTab) {
-            // Today/Transactions Tab
             NavigationStack {
-                TransactionListView()
+                LedgerView()
             }
             .tabItem {
-                Label("Today", systemImage: "calendar")
+                Label("The Ledger", systemImage: "book.fill")
             }
             .tag(0)
             
-            // Balance Tab
+            // Quick Add Debt
             NavigationStack {
-                BalanceOverviewView()
+                QuickAddView()
             }
             .tabItem {
-                Label("Balance", systemImage: "chart.bar.fill")
+                Label("Quick Add", systemImage: "plus.circle.fill")
             }
             .tag(1)
             
-            // Budget/Analytics Tab
+            // Collections Tab
             NavigationStack {
-                AnalyticsView()
+                CollectionsView()
             }
             .tabItem {
-                Label("Budget", systemImage: "chart.pie.fill")
+                Label("Collections", systemImage: "exclamationmark.triangle.fill")
             }
             .tag(2)
             
-            // Reports/Export Tab
+            // Settlement Tab
             NavigationStack {
-                ReportsView()
+                SettlementRootView()
             }
             .tabItem {
-                Label("Reports", systemImage: "doc.text.fill")
+                Label("Settlement", systemImage: "checkmark.circle")
             }
             .tag(3)
             
-            // More/Settings Tab
+            // Export Tab
             NavigationStack {
-                SettingsView()
+                ExportView()
             }
             .tabItem {
-                Label("More", systemImage: "ellipsis.circle.fill")
+                Label("Export", systemImage: "square.and.arrow.up")
             }
             .tag(4)
         }
-        .tint(Color.tealAccent)
+        .tint(Color.inkBlack)
+        // Debug: force tab bar to always be visible
+        .tabViewStyle(DefaultTabViewStyle())
     }
 }
 
-/// Color extensions matching reference app
+/// Loan Shark Notebook Color Scheme
 public extension Color {
-    static let appBackground = Color(hex: "1C1C1E")
-    static let cardBackground = Color(hex: "2C2C2E")
-    static let tealAccent = Color(hex: "00BCD4")
-    static let incomeGreen = Color(hex: "4CAF50")
-    static let expenseRed = Color(hex: "FF5252")
-    static let warningYellow = Color(hex: "FFC107")
-    static let textPrimary = Color.white
-    static let textSecondary = Color(hex: "8E8E93")
+    static let paperYellow = Color(hex: "F4E8D0") // Aged paper
+    static let inkBlack = Color(hex: "1A1A1A")    // Pen ink  
+    static let bloodRed = Color(hex: "8B0000")     // Overdue
+    static let cashGreen = Color(hex: "2E7D32")    // Settled
+    static let pencilGray = Color(hex: "6B6B6B")   // Notes
 }
 
 /// Layout constants
@@ -79,13 +77,32 @@ public struct Layout {
     public static let buttonHeight: CGFloat = 44
 }
 
-/// Typography extensions
+/// Loan Shark Notebook Typography - Handwritten Feel
 public extension Font {
-    static let largeAmount = Font.system(size: 34, weight: .bold, design: .rounded)
-    static let sectionTitle = Font.system(size: 20, weight: .semibold)
-    static let cardTitle = Font.system(size: 17, weight: .semibold)
-    static let amount = Font.system(size: 17, weight: .medium).monospacedDigit()
-    static let label = Font.system(size: 14, weight: .regular)
+    // Amounts - Always monospaced like ledger entries
+    static let ledgerAmount = Font.system(size: 18, weight: .bold, design: .monospaced)
+    static let largeAmount = Font.system(size: 34, weight: .black, design: .monospaced)
+    
+    // Names and labels - Clean but not fancy
+    static let ledgerName = Font.system(size: 16, weight: .medium, design: .monospaced)
+    static let sectionTitle = Font.system(size: 20, weight: .bold, design: .monospaced)
+    
+    // Stamps and badges - Bold like stamped ink
+    static let overdueStamp = Font.system(size: 14, weight: .black, design: .monospaced)
+    static let badgeText = Font.system(size: 12, weight: .bold, design: .monospaced)
+    
+    // Body text - Simple and direct
+    static let notebookText = Font.system(size: 16, weight: .regular, design: .monospaced)
+    static let smallNote = Font.system(size: 14, weight: .regular, design: .monospaced)
+    
+    // Headers - Bold and imposing
+    static let notebookHeader = Font.system(size: 28, weight: .black, design: .monospaced)
+    static let tabTitle = Font.system(size: 24, weight: .bold, design: .monospaced)
+    
+    // Legacy compatibility
+    static let cardTitle = ledgerName
+    static let amount = ledgerAmount
+    static let label = smallNote
 }
 
 /// Color hex initializer

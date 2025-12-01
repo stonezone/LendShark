@@ -1,153 +1,286 @@
 import SwiftUI
+import CoreData
 
-/// Settings view
+/// Settings view - now uses environment object instead of singleton
 public struct SettingsView: View {
-    @AppStorage("enableNotifications") private var enableNotifications = true
-    @AppStorage("enableiCloudSync") private var enableiCloudSync = true
-    @AppStorage("currencySymbol") private var currencySymbol = "$"
+    @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject private var settingsService: SettingsService
+    @State private var showingCurrencyPicker = false
+    @State private var showingExportFormatPicker = false
+    @State private var showingNotificationFrequencyPicker = false
     @State private var showingClearDataAlert = false
+    @State private var showingContactSupport = false
+    @State private var showingResetAlert = false
     
     public init() {}
     
     public var body: some View {
         Form {
+            // General Settings Section
             Section {
-                Toggle("iCloud Sync", isOn: $enableiCloudSync)
-                    .tint(.tealAccent)
-                
-                Toggle("Notifications", isOn: $enableNotifications)
-                    .tint(.tealAccent)
-            } header: {
-                Text("GENERAL")
-                    .font(.caption)
-                    .foregroundColor(.textSecondary)
-            }
-            .listRowBackground(Color.cardBackground)
-            
-            Section {
-                HStack {
-                    Text("Currency")
-                        .foregroundColor(.textPrimary)
-                    Spacer()
-                    Text(currencySymbol)
-                        .foregroundColor(.textSecondary)
-                }
-                
-                HStack {
-                    Text("Theme")
-                        .foregroundColor(.textPrimary)
-                    Spacer()
-                    Text("Dark")
-                        .foregroundColor(.textSecondary)
-                }
-            } header: {
-                Text("DISPLAY")
-                    .font(.caption)
-                    .foregroundColor(.textSecondary)
-            }
-            .listRowBackground(Color.cardBackground)
-            
-            Section {
-                HStack {
-                    Text("Version")
-                        .foregroundColor(.textPrimary)
-                    Spacer()
-                    Text("1.0.0")
-                        .foregroundColor(.textSecondary)
-                }
-                
-                HStack {
-                    Text("Build")
-                        .foregroundColor(.textPrimary)
-                    Spacer()
-                    Text("2025.1")
-                        .foregroundColor(.textSecondary)
-                }
-            } header: {
-                Text("ABOUT")
-                    .font(.caption)
-                    .foregroundColor(.textSecondary)
-            }
-            .listRowBackground(Color.cardBackground)
-            
-            Section {
-                Button(action: exportAllData) {
-                    HStack {
-                        Image(systemName: "square.and.arrow.up")
-                        Text("Export All Data")
+                Toggle("Notifications", isOn: $settingsService.enableNotifications)
+                    .tint(.inkBlack)
+                    .onChange(of: settingsService.enableNotifications) { newValue in
+                        if newValue {
+                            settingsService.scheduleNotifications()
+                        } else {
+                            settingsService.cancelAllNotifications()
+                        }
                     }
-                    .foregroundColor(.tealAccent)
-                }
                 
-                Button(action: { showingClearDataAlert = true }) {
+                if settingsService.enableNotifications {
                     HStack {
-                        Image(systemName: "trash")
-                        Text("Clear All Data")
-                    }
-                    .foregroundColor(.expenseRed)
-                }
-            } header: {
-                Text("DATA MANAGEMENT")
-                    .font(.caption)
-                    .foregroundColor(.textSecondary)
-            }
-            .listRowBackground(Color.cardBackground)
-            
-            Section {
-                Link(destination: URL(string: "https://example.com/privacy")!) {
-                    HStack {
-                        Text("Privacy Policy")
-                            .foregroundColor(.textPrimary)
+                        Text("Frequency")
+                            .foregroundColor(.inkBlack)
                         Spacer()
-                        Image(systemName: "arrow.up.right.square")
-                            .foregroundColor(.textSecondary)
+                        Button(settingsService.notificationFrequency) {
+                            showingNotificationFrequencyPicker = true
+                        }
+                        .foregroundColor(.pencilGray)
                     }
                 }
                 
-                Link(destination: URL(string: "https://example.com/terms")!) {
-                    HStack {
-                        Text("Terms of Service")
-                            .foregroundColor(.textPrimary)
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square")
-                            .foregroundColor(.textSecondary)
-                    }
+                Toggle("Auto-settle Transactions", isOn: $settingsService.autoSettle)
+                    .tint(.inkBlack)
+                
+                Toggle("iCloud Sync", isOn: $settingsService.enableiCloudSync)
+                    .tint(.inkBlack)
+                
+                if settingsService.isBiometricAvailable() {
+                    Toggle(settingsService.getBiometricType(), isOn: $settingsService.biometricAuth)
+                        .tint(.inkBlack)
                 }
             } header: {
-                Text("LEGAL")
-                    .font(.caption)
-                    .foregroundColor(.textSecondary)
+                Text("General")
             }
-            .listRowBackground(Color.cardBackground)
+            
+            // Display Settings Section
+            Section {
+                HStack {
+                    Text("Currency Symbol")
+                        .foregroundColor(.inkBlack)
+                    Spacer()
+                    Button(settingsService.currencySymbol) {
+                        showingCurrencyPicker = true
+                    }
+                    .foregroundColor(.pencilGray)
+                }
+                
+                HStack {
+                    Text("Export Format")
+                        .foregroundColor(.inkBlack)
+                    Spacer()
+                    Button(settingsService.exportFormat) {
+                        showingExportFormatPicker = true
+                    }
+                    .foregroundColor(.pencilGray)
+                }
+                
+                Toggle("Dark Mode", isOn: $settingsService.darkMode)
+                    .tint(.inkBlack)
+            } header: {
+                Text("Display")
+            }
+            
+            // Privacy Settings Section
+            Section {
+Toggle("Crash Reporting", isOn: $settingsService.crashReportingEnabled)
+                    .tint(.inkBlack)
+            } header: {
+                Text("Privacy")
+            }
+            
+            // Data Management Section
+            Section {
+                Button("Clear All Data") {
+                    showingClearDataAlert = true
+                }
+                .foregroundColor(.red)
+                
+                Button("Reset Settings") {
+                    showingResetAlert = true
+                }
+                .foregroundColor(.orange)
+            } header: {
+                Text("Data Management")
+            }
+            
+            // Support Section
+            Section {
+                Button("Contact Support") {
+                    showingContactSupport = true
+                }
+                .foregroundColor(.inkBlack)
+                
+                HStack {
+                    Text("App Version")
+                        .foregroundColor(.inkBlack)
+                    Spacer()
+                    Text(settingsService.getAppVersion())
+                        .foregroundColor(.pencilGray)
+                }
+                
+                HStack {
+                    Text("Build Number")
+                        .foregroundColor(.inkBlack)
+                    Spacer()
+                    Text(settingsService.getBuildNumber())
+                        .foregroundColor(.pencilGray)
+                }
+            } header: {
+                Text("Support")
+            }
         }
-        .scrollContentBackground(.hidden)
-        .background(Color.appBackground)
         .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.large)
-        .alert("Clear All Data?", isPresented: $showingClearDataAlert) {
-            Button("Cancel", role: .cancel) {}
+        
+        // Pickers
+        .sheet(isPresented: $showingCurrencyPicker) {
+            CurrencyPickerView(settingsService: settingsService)
+        }
+        .sheet(isPresented: $showingExportFormatPicker) {
+            ExportFormatPickerView(settingsService: settingsService)
+        }
+        .sheet(isPresented: $showingNotificationFrequencyPicker) {
+            NotificationFrequencyPickerView(settingsService: settingsService)
+        }
+        
+        // Alerts
+        .alert("Clear All Data", isPresented: $showingClearDataAlert) {
+            Button("Cancel", role: .cancel) { }
             Button("Clear", role: .destructive) {
                 clearAllData()
             }
         } message: {
             Text("This will permanently delete all your transactions. This action cannot be undone.")
         }
-    }
-    
-    private func exportAllData() {
-        // Implement export functionality
-        print("Exporting all data...")
+        .alert("Reset Settings", isPresented: $showingResetAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                settingsService.resetToDefaults()
+            }
+        } message: {
+            Text("This will reset all settings to their default values.")
+        }
+        .sheet(isPresented: $showingContactSupport) {
+            ContactSupportView()
+        }
     }
     
     private func clearAllData() {
-        // Implement clear data functionality
+        // Implementation to clear Core Data
+        // This would need access to the persistence controller through environment
         print("Clearing all data...")
     }
 }
 
-#Preview {
-    NavigationStack {
-        SettingsView()
-            .preferredColorScheme(.dark)
+// MARK: - Picker Views
+
+private struct CurrencyPickerView: View {
+    @ObservedObject var settingsService: SettingsService
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            List(settingsService.availableCurrencies, id: \.self) { currency in
+                HStack {
+                    Text(currency)
+                    Spacer()
+                    if currency == settingsService.currencySymbol {
+                        Image(systemName: "checkmark")
+                            .foregroundColor(.inkBlack)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    settingsService.currencySymbol = currency
+                    dismiss()
+                }
+            }
+            .navigationTitle("Currency")
+        }
+    }
+}
+
+private struct ExportFormatPickerView: View {
+    @ObservedObject var settingsService: SettingsService
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            List(settingsService.availableExportFormats, id: \.self) { format in
+                HStack {
+                    Text(format)
+                    Spacer()
+                    if format == settingsService.exportFormat {
+                        Image(systemName: "checkmark")
+                            .foregroundColor(.inkBlack)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    settingsService.exportFormat = format
+                    dismiss()
+                }
+            }
+            .navigationTitle("Export Format")
+        }
+    }
+}
+
+private struct NotificationFrequencyPickerView: View {
+    @ObservedObject var settingsService: SettingsService
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            List(settingsService.availableNotificationFrequencies, id: \.self) { frequency in
+                HStack {
+                    Text(frequency)
+                    Spacer()
+                    if frequency == settingsService.notificationFrequency {
+                        Image(systemName: "checkmark")
+                            .foregroundColor(.inkBlack)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    settingsService.notificationFrequency = frequency
+                    dismiss()
+                }
+            }
+            .navigationTitle("Notification Frequency")
+        }
+    }
+}
+
+private struct ContactSupportView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Image(systemName: "envelope")
+                    .font(.system(size: 60))
+                    .foregroundColor(.inkBlack)
+                
+                Text("Contact Support")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                
+                Text("For questions, issues, or feedback, please email us at:")
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.pencilGray)
+                
+                Button("support@lendshark.app") {
+                    dismiss()
+                }
+                .foregroundColor(.inkBlack)
+                .font(.headline)
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Support")
+        }
     }
 }

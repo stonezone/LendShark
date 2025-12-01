@@ -50,6 +50,20 @@ public struct TransactionDTO: Codable, Equatable, Hashable, Sendable {
     public static let version = "1.0.0"
 }
 
+/// Data Transfer Object for balance summary calculations
+/// Encapsulates balance state without exposing Core Data entities
+public struct BalanceSummaryDTO: Codable, Equatable, Sendable {
+    public let owedToMe: Decimal
+    public let iOwe: Decimal
+    public let netBalance: Decimal
+    
+    public init(owedToMe: Decimal, iOwe: Decimal, netBalance: Decimal) {
+        self.owedToMe = owedToMe
+        self.iOwe = iOwe
+        self.netBalance = netBalance
+    }
+}
+
 /// Balance calculation result DTO
 public struct BalanceDTO: Equatable, Sendable {
     public let owedToMe: Decimal

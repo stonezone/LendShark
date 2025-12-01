@@ -1,74 +1,30 @@
 # API Versions
 
-## Current API Versions
+## External APIs
 
-| API/Framework | Version | Status | Last Verified |
-|--------------|---------|--------|---------------|
-| iOS SDK | 16.0+ | ✅ Stable | 2025-01-01 |
-| Swift | 6.0 | ✅ Stable | 2025-01-01 |
-| CloudKit | Framework | ✅ Stable | 2025-01-01 |
-| Core Data | Framework | ✅ Stable | 2025-01-01 |
-| SwiftUI | Framework | ✅ Stable | 2025-01-01 |
+### CloudKit
+- **Version:** iOS 16.0+ SDK
+- **Framework:** CloudKit.framework
+- **Usage:** Transaction sync across devices
+- **Status:** Basic implementation added
 
-## DTO Contract Versions
+### Core Data
+- **Version:** iOS 16.0+ SDK  
+- **Framework:** CoreData.framework
+- **Usage:** Local data persistence
+- **Model Version:** LendShark.xcdatamodel v1.0
 
-| Contract | Version | Breaking Changes | Migration Required |
-|----------|---------|-----------------|-------------------|
-| TransactionDTO | 1.0.0 | - | No |
-| BalanceDTO | 1.0.0 | - | No |
-| ExportResultDTO | 1.0.0 | - | No |
+## Swift Package Dependencies
+- None (all functionality built-in)
 
-## Service Protocol Versions
+## System Requirements
+- **iOS:** 16.0 or later
+- **macOS:** 13.0 or later (for testing)
+- **Xcode:** 15.0 or later
+- **Swift:** 5.9
 
-| Protocol | Version | Compatibility |
-|----------|---------|--------------|
-| TransactionServiceProtocol | 1.0.0 | All versions |
-| ExportServiceProtocol | 1.0.0 | All versions |
-| SyncServiceProtocol | 1.0.0 | All versions |
-| ValidationServiceProtocol | 1.0.0 | All versions |
-| ParserServiceProtocol | 1.0.0 | All versions |
+## API Endpoints
+No external REST APIs used - app is fully offline-capable with optional CloudKit sync.
 
-## Compatibility Matrix
-
-### iOS Versions
-- **Minimum**: iOS 16.0
-- **Recommended**: iOS 17.0+
-- **Maximum Tested**: iOS 18.0
-
-### Swift Versions
-- **Minimum**: Swift 5.9
-- **Current**: Swift 6.0
-- **Maximum**: Swift 6.1
-
-## Migration Guidelines
-
-### From Version 0.x to 1.0
-No migration required - initial release
-
-### Future Migrations
-When updating major versions:
-1. Backup all user data
-2. Run migration validator
-3. Execute migration steps
-4. Verify data integrity
-5. Update version markers
-
-## Version Check Schedule
-
-- **Daily**: Check for security updates
-- **Weekly**: Validate dependency versions
-- **Monthly**: Full compatibility audit
-- **Quarterly**: Performance benchmark across versions
-
-## Deprecation Notices
-
-Currently no deprecated APIs.
-
-## Change Log
-
-### Version 1.0.0 (2025-01-01)
-- Initial release
-- Core transaction management
-- CloudKit sync
-- Export functionality
-- Natural language parsing
+## Version History
+- **1.0.0** - Initial release with Core Data and CloudKit sync

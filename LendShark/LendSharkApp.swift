@@ -3,24 +3,24 @@ import LendSharkFeature
 
 @main
 struct LendSharkApp: App {
-    let persistenceController = PersistenceController.shared
+    private let persistenceController: PersistenceController
+    @StateObject private var settingsService: SettingsService
     
     init() {
-        // Validate versions on startup
-        let versionResult = VersionManager.shared.validateAllVersions()
-        if !versionResult.isValid {
-            print("Version validation issues found:")
-            for issue in versionResult.issues {
-                print("- \(issue.component): \(issue.current) (required: \(issue.required)) [\(issue.severity)]")
-            }
-        }
+        // Initialize persistence first
+        let persistence = PersistenceController()
+        self.persistenceController = persistence
+        
+        // Create settings service
+        let settings = SettingsService()
+        _settingsService = StateObject(wrappedValue: settings)
     }
     
     var body: some Scene {
         WindowGroup {
             MainTabView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                .preferredColorScheme(.dark)
+                .environmentObject(settingsService)
         }
     }
 }

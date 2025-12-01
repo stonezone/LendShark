@@ -1,26 +1,108 @@
 import Foundation
 import CoreData
+import os
 
-/// Core Data stack with CloudKit integration
-/// Following Single Responsibility principle - one purpose: data persistence
-import Foundation
-import CoreData
+/// Core Data stack (CloudKit removed/disabled)
+private let logger = AppLogger.persistence
 
-/// Core Data stack with programmatic model definition
-/// Following Single Responsibility principle - one purpose: data persistence
-import Foundation
-import CoreData
+public final class PersistenceController: Sendable {
+    // Load the Core Data model from Bundle.module
+    nonisolated(unsafe) private static let managedObjectModel: NSManagedObjectModel = {
+        let bundles = [
+            Bundle.main,
+            Bundle(for: PersistenceController.self),
+            Bundle.module
+        ]
+        for bundle in bundles {
+            if let modelURL = bundle.url(forResource: "LendShark", withExtension: "momd"),
+               let model = NSManagedObjectModel(contentsOf: modelURL) {
+                logger.info("Successfully loaded Core Data model from \(bundle.bundleIdentifier ?? "unknown bundle")")
+                return model
+            }
+        }
+        logger.critical("Failed to find LendShark.momd in any bundle - falling back to in-memory store")
+        // Create an empty model as fallback - app will run but without persistence
+        let model = NSManagedObjectModel()
+        
+        // Create Transaction entity programmatically as fallback
+        let transactionEntity = NSEntityDescription()
+        transactionEntity.name = "Transaction"
+        transactionEntity.managedObjectClassName = "Transaction"
+        
+        // Add basic attributes
+        let idAttribute = NSAttributeDescription()
+        idAttribute.name = "id"
+        idAttribute.attributeType = .UUIDAttributeType
+        idAttribute.isOptional = true
+        
+        let partyAttribute = NSAttributeDescription()
+        partyAttribute.name = "party"
+        partyAttribute.attributeType = .stringAttributeType
+        partyAttribute.isOptional = true
+        
+        let amountAttribute = NSAttributeDescription()
+        amountAttribute.name = "amount"
+        amountAttribute.attributeType = .decimalAttributeType
+        amountAttribute.isOptional = true
+        
+        let timestampAttribute = NSAttributeDescription()
+        timestampAttribute.name = "timestamp"
+        timestampAttribute.attributeType = .dateAttributeType
+        timestampAttribute.isOptional = true
+        
+        let directionAttribute = NSAttributeDescription()
+        directionAttribute.name = "direction"
+        directionAttribute.attributeType = .integer16AttributeType
+        directionAttribute.isOptional = false
+        directionAttribute.defaultValue = Int16(0)
+        
+        let settledAttribute = NSAttributeDescription()
+        settledAttribute.name = "settled"
+        settledAttribute.attributeType = .booleanAttributeType
+        settledAttribute.isOptional = false
+        settledAttribute.defaultValue = false
+        
+        let isItemAttribute = NSAttributeDescription()
+        isItemAttribute.name = "isItem"
+        isItemAttribute.attributeType = .booleanAttributeType
+        isItemAttribute.isOptional = false
+        isItemAttribute.defaultValue = false
+        
+        let itemAttribute = NSAttributeDescription()
+        itemAttribute.name = "item"
+        itemAttribute.attributeType = .stringAttributeType
+        itemAttribute.isOptional = true
+        
+        let dueDateAttribute = NSAttributeDescription()
+        dueDateAttribute.name = "dueDate"
+        dueDateAttribute.attributeType = .dateAttributeType
+        dueDateAttribute.isOptional = true
+        
+        let notesAttribute = NSAttributeDescription()
+        notesAttribute.name = "notes"
+        notesAttribute.attributeType = .stringAttributeType
+        notesAttribute.isOptional = true
+        
+        let cloudKitRecordIDAttribute = NSAttributeDescription()
+        cloudKitRecordIDAttribute.name = "cloudKitRecordID"
+        cloudKitRecordIDAttribute.attributeType = .stringAttributeType
+        cloudKitRecordIDAttribute.isOptional = true
+        
+        transactionEntity.properties = [
+            idAttribute, partyAttribute, amountAttribute, timestampAttribute,
+            directionAttribute, settledAttribute, isItemAttribute, itemAttribute,
+            dueDateAttribute, notesAttribute, cloudKitRecordIDAttribute
+        ]
+        model.entities = [transactionEntity]
+        
+        return model
+    }()
 
-/// Core Data stack with CloudKit integration
-/// Following Single Responsibility principle - one purpose: data persistence
-public final class PersistenceController: @unchecked Sendable {
-    public static let shared = PersistenceController()
-    
+    // Preview instance for SwiftUI previews - in-memory store
+    @MainActor
     public static let preview: PersistenceController = {
         let result = PersistenceController(inMemory: true)
         let viewContext = result.container.viewContext
-        
-        // Add sample data for previews
         for i in 1...5 {
             let transaction = Transaction(context: viewContext)
             transaction.id = UUID()
@@ -31,56 +113,43 @@ public final class PersistenceController: @unchecked Sendable {
             transaction.isItem = false
             transaction.timestamp = Date()
         }
-        
         try? viewContext.save()
         return result
     }()
-    
-    public let container: NSPersistentCloudKitContainer
-    private(set) public var isDataStoreReady = false
-    private(set) public var canSaveData = false
-    
+
+    public let container: NSPersistentContainer
+    private let _isDataStoreReady = OSAllocatedUnfairLock(initialState: false)
+    private let _canSaveData = OSAllocatedUnfairLock(initialState: false)
+
+    public var isDataStoreReady: Bool { _isDataStoreReady.withLock { $0 } }
+    public var canSaveData: Bool { _canSaveData.withLock { $0 } }
+
     public init(inMemory: Bool = false) {
-        // Load the model from the bundle
-        guard let modelURL = Bundle.module.url(forResource: "LendShark", withExtension: "momd") ??
-                             Bundle.module.url(forResource: "LendShark", withExtension: "xcdatamodeld") else {
-            fatalError("Failed to find Core Data model in bundle")
-        }
-        
-        guard let model = NSManagedObjectModel(contentsOf: modelURL) else {
-            fatalError("Failed to load Core Data model from URL: \(modelURL)")
-        }
-        
-        container = NSPersistentCloudKitContainer(name: "LendShark", managedObjectModel: model)
-        
+        container = NSPersistentContainer(name: "LendShark", managedObjectModel: Self.managedObjectModel)
+
         if inMemory {
             container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
-        } else {
-            // Configure for CloudKit with proper version validation
-            container.persistentStoreDescriptions.forEach { storeDescription in
-                storeDescription.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-                storeDescription.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
-            }
         }
-        
-        container.loadPersistentStores { [weak self] storeDescription, error in
+
+        container.loadPersistentStores { [weak self] _, error in
             if let error = error {
-                print("Core Data failed to load: \(error.localizedDescription)")
-                // Continue anyway - the app can work without persistence
-                self?.isDataStoreReady = false
-                self?.canSaveData = false
+                logger.error("Core Data failed to load", error: error)
+                self?._isDataStoreReady.withLock { $0 = false }
+                self?._canSaveData.withLock { $0 = false }
             } else {
-                print("Core Data loaded successfully")
-                self?.isDataStoreReady = true
-                self?.canSaveData = true
+                logger.info("Core Data loaded successfully")
+                self?._isDataStoreReady.withLock { $0 = true }
+                self?._canSaveData.withLock { $0 = true }
             }
         }
-        
+
         container.viewContext.automaticallyMergesChangesFromParent = true
+        // Use Swift-friendly merge policy constant to avoid symbol resolution issues.
+        container.viewContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
     }
-    
-    // MARK: - DTO Conversion Methods (Pure Functions)
-    
+
+    // MARK: - DTO Conversion (Pure Functions)
+
     public func transactionToDTO(_ transaction: Transaction) -> TransactionDTO {
         TransactionDTO(
             id: transaction.id ?? UUID(),
@@ -96,12 +165,12 @@ public final class PersistenceController: @unchecked Sendable {
             cloudKitRecordID: transaction.cloudKitRecordID
         )
     }
-    
+
     public func dtoToTransaction(_ dto: TransactionDTO, context: NSManagedObjectContext) -> Transaction {
         let transaction = Transaction(context: context)
         transaction.id = dto.id
         transaction.party = dto.party
-        transaction.amount = dto.amount as? NSDecimalNumber
+        transaction.amount = dto.amount.map { NSDecimalNumber(decimal: $0) }
         transaction.item = dto.item
         transaction.direction = Int16(dto.direction.rawValue)
         transaction.isItem = dto.isItem
@@ -112,22 +181,25 @@ public final class PersistenceController: @unchecked Sendable {
         transaction.cloudKitRecordID = dto.cloudKitRecordID
         return transaction
     }
-    
+
     // MARK: - Batch Operations
-    
+
+    @MainActor
     public func saveContext() {
         let context = container.viewContext
-        
         guard canSaveData else {
-            print("Cannot save: Data store not ready")
+            logger.warning("Cannot save: Data store not ready")
             return
         }
-        
         if context.hasChanges {
             do {
                 try context.save()
+                logger.debug("Context saved successfully")
             } catch {
-                print("Failed to save context: \(error)")
+                logger.error("Failed to save context", error: error)
+                if let saveError = error as NSError? {
+                    logger.error("Save error details: \(saveError.userInfo)")
+                }
             }
         }
     }

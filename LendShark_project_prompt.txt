@@ -1,0 +1,164 @@
+ LendShark: Personal Loan Tracking Application
+
+  Project Vision
+
+  Create a mobile application that transforms how people track
+  personal loans and financial obligations between friends,
+  family, and colleagues. The app should make it effortless to
+  record, monitor, and settle financial relationships through
+  intuitive interaction and intelligent automation.
+
+  Core Problem Statement
+
+  People struggle to keep track of money they've lent or borrowed
+   from others, leading to forgotten debts, strained
+  relationships, and financial confusion. Current solutions are
+  either too complex, require both parties to use the same app,
+  or lack the intelligence to handle natural human communication
+  about money.
+
+  Primary Goals
+
+  Effortless Transaction Recording
+
+  Users should be able to record financial transactions using
+  natural, conversational language. Instead of filling out forms,
+   they should type or speak phrases like "borrowed $150 from
+  Mike for groceries" or "lent Sarah $50 for lunch" and have the
+  system automatically understand and categorize the transaction.
+
+  Intelligent Financial Relationship Management
+
+  The application should maintain accurate, real-time
+  calculations of financial relationships between the user and
+  all parties. It should track who owes what to whom, calculate
+  net positions, and provide clear visibility into settlement
+  status across all relationships.
+
+  Professional-Grade Analytics and Insights
+
+  Users should receive meaningful insights about their lending
+  patterns, settlement rates, and financial exposure. The app
+  should present data through intuitive visualizations and
+  provide actionable recommendations for managing their financial
+   relationships.
+
+  Comprehensive Reporting Capabilities
+
+  The system should generate professional-quality reports
+  suitable for personal records, tax purposes, or legal
+  documentation. Reports should be available in multiple formats
+  and allow for flexible date ranges and transaction filtering.
+
+  Seamless User Experience
+
+  The interface should feel intuitive and responsive, with modern
+   mobile design patterns that make complex financial data
+  accessible. Users should be able to quickly settle debts,
+  search transaction history, and access key information without
+  friction.
+
+  Key Functional Requirements
+
+  Natural Language Processing
+
+  - Parse conversational input to extract transaction details
+  - Identify party names, amounts, transaction direction, and
+  context
+  - Handle various phrasings and linguistic patterns
+  - Support multiple languages and regional differences
+  - Auto-categorize transactions based on context clues
+
+  Financial Calculation Engine
+
+  - Maintain accurate running balances for all parties
+  - Calculate net positions across multiple transactions
+  - Track partial payments and settlement histories
+  - Handle complex scenarios like split bills and group expenses
+  - Provide real-time updates across all views
+
+  Data Visualization and Analytics
+
+  - Present financial relationships through charts and graphs
+  - Show trends over time periods
+  - Calculate and display settlement rates
+  - Provide insights about lending patterns and risks
+  - Generate automated recommendations for users
+
+  Export and Reporting System
+
+  - Create professional reports in multiple formats
+  - Support flexible date range selection
+  - Allow transaction filtering and customization
+  - Generate summaries and detailed transaction lists
+  - Maintain formatting suitable for official documentation
+
+  Settings and Customization
+
+  - Support multiple currencies and regional formats
+  - Provide notification systems for payment reminders
+  - Enable data backup and synchronization across devices
+  - Offer privacy controls and security features
+  - Allow interface customization and accessibility options
+
+  User Experience Objectives
+
+  Simplicity Without Sacrificing Power
+
+  The app should feel simple for casual users while providing
+  sophisticated features for power users. Basic operations should
+   be immediately intuitive, while advanced features remain
+  accessible but not overwhelming.
+
+  Trust and Reliability
+
+  Users should feel confident that their financial data is
+  accurate, secure, and persistently stored. The app should
+  handle edge cases gracefully and provide clear feedback about
+  data integrity.
+
+  Motivation to Use
+
+  The experience should be pleasant enough that users want to
+  track their loans rather than feeling burdened by the task. The
+   interface should celebrate positive actions like settlements
+  and provide encouraging feedback.
+
+  Success Criteria
+
+  Accuracy and Intelligence
+
+  The natural language processing should correctly interpret user
+   input with high accuracy, and financial calculations should be
+   mathematically perfect across all scenarios.
+
+  Adoption and Retention
+
+  Users should find the app valuable enough to use consistently
+  over time, with transaction entry becoming a natural habit
+  rather than a chore.
+
+  Professional Quality
+
+  The output and reports should be professional enough for users
+  to rely on them for important financial decisions and official
+  documentation.
+
+  Performance and Reliability
+
+  The app should perform smoothly across different devices and
+  usage patterns, with reliable data persistence and intuitive
+  error handling.
+
+  Design Philosophy
+
+  Focus on removing friction from financial relationship
+  management while providing genuine value through intelligent
+  automation and insightful analytics. The app should feel like
+  having a personal financial assistant that understands natural
+  communication and provides professional-grade insights without
+  requiring financial expertise from the user.
+
+  The ultimate goal is to create a tool that people genuinely
+  enjoy using and that meaningfully improves their financial
+  relationships and peace of mind.
