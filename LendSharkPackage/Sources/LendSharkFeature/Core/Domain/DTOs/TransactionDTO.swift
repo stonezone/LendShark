@@ -14,6 +14,7 @@ public struct TransactionDTO: Codable, Equatable, Hashable, Sendable {
     public let dueDate: Date?
     public let interestRate: Decimal?
     public let notes: String?
+    public let phoneNumber: String?
     public let cloudKitRecordID: String?
     
     public enum TransactionDirection: Int, Codable, Sendable {
@@ -33,6 +34,7 @@ public struct TransactionDTO: Codable, Equatable, Hashable, Sendable {
         dueDate: Date? = nil,
         interestRate: Decimal? = nil,
         notes: String? = nil,
+        phoneNumber: String? = nil,
         cloudKitRecordID: String? = nil
     ) {
         self.id = id
@@ -46,11 +48,12 @@ public struct TransactionDTO: Codable, Equatable, Hashable, Sendable {
         self.dueDate = dueDate
         self.interestRate = interestRate
         self.notes = notes
+        self.phoneNumber = phoneNumber
         self.cloudKitRecordID = cloudKitRecordID
     }
     
     /// Semantic versioning for DTO changes
-    public static let version = "1.0.0"
+    public static let version = "1.1.0"
 }
 
 /// Data Transfer Object for balance summary calculations

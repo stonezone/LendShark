@@ -10,6 +10,9 @@ struct LedgerView: View {
     ) private var transactions: FetchedResults<Transaction>
 
     @State private var debtors: [DebtLedger.DebtorInfo] = []
+    @State private var showingSMSComposer = false
+    @State private var smsRecipient: String = ""
+    @State private var smsMessage: String = ""
 
     var body: some View {
         ZStack {
@@ -95,19 +98,44 @@ struct LedgerView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // The list - NO CARDS, NO FANCY UI
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            ForEach(debtors, id: \.name) { debtor in
-                                NavigationLink(destination: DebtorDetailView(personName: debtor.name)) {
-                                    debtorRow(debtor)
-                                }
-                                .buttonStyle(.plain)
+                    // The list with swipe actions - ← swipe for TEXT, → swipe for PAID
+                    List {
+                        ForEach(debtors, id: \.name) { debtor in
+                            NavigationLink(destination: DebtorDetailView(personName: debtor.name)) {
+                                debtorRow(debtor)
                             }
+                            .listRowBackground(
+                                debtor.isOverdue
+                                    ? Color.bloodRed.opacity(0.06)
+                                    : Color.paperYellow
+                            )
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    settleAllDebts(for: debtor.name)
+                                } label: {
+                                    Label("PAID", systemImage: "checkmark.circle.fill")
+                                }
+                                .tint(.cashGreen)
+                            }
+                            #if os(iOS)
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                if let phone = getPhoneNumber(for: debtor.name), !phone.isEmpty {
+                                    Button {
+                                        sendReminder(to: debtor)
+                                    } label: {
+                                        Label("TEXT", systemImage: "message.fill")
+                                    }
+                                    .tint(.inkBlack)
+                                }
+                            }
+                            #endif
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
                 }
             }
         }
@@ -117,6 +145,13 @@ struct LedgerView: View {
         .onChange(of: transactions.count) { _ in
             updateDebtors()
         }
+        #if os(iOS)
+        .smsComposer(
+            isPresented: $showingSMSComposer,
+            recipient: smsRecipient,
+            body: smsMessage
+        )
+        #endif
     }
     
     /// Single debtor row - stark and direct with dotted leaders
@@ -286,6 +321,49 @@ struct LedgerView: View {
         formatter.currencySymbol = "$"
         return formatter.string(from: amount as NSDecimalNumber) ?? "$0"
     }
+    
+    // MARK: - Swipe Actions
+    
+    /// Settle all debts for a person (swipe right action)
+    private func settleAllDebts(for name: String) {
+        do {
+            try Transaction.settleAll(with: name, in: viewContext)
+            updateDebtors()
+        } catch {
+            print("Failed to settle: \(error)")
+        }
+    }
+    
+    /// Get phone number for a debtor from their transactions
+    private func getPhoneNumber(for name: String) -> String? {
+        transactions.first(where: { $0.party == name })?.phoneNumber
+    }
+    
+    /// Get earliest due date for a debtor
+    private func getDueDate(for name: String) -> Date? {
+        transactions
+            .filter { $0.party == name && $0.settled == false && $0.dueDate != nil }
+            .compactMap { $0.dueDate }
+            .min()
+    }
+    
+    #if os(iOS)
+    /// Send SMS reminder (swipe left action)
+    private func sendReminder(to debtor: DebtLedger.DebtorInfo) {
+        guard let phone = getPhoneNumber(for: debtor.name) else { return }
+        
+        let daysOverdue = debtor.daysOverdue
+        let message = SMSService.composeReminder(
+            name: debtor.name,
+            amount: debtor.totalOwed,
+            daysOverdue: daysOverdue
+        )
+        
+        smsRecipient = phone
+        smsMessage = message
+        showingSMSComposer = true
+    }
+    #endif
 }
 
 #Preview {

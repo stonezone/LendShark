@@ -155,3 +155,7 @@ dist/
 .coverage
 .coverage.*
 htmlcov/
+# Claude OS state files (don't commit these)
+.claude-os/claude-os-state.json
+.claude-os/.index_state
+.claude-os/.commit_count

@@ -16,6 +16,7 @@ public class Transaction: NSManagedObject, Identifiable {
     @NSManaged public var dueDate: Date?
     @NSManaged public var interestRate: NSDecimalNumber?
     @NSManaged public var notes: String?
+    @NSManaged public var phoneNumber: String?
     @NSManaged public var cloudKitRecordID: String?
 }
 

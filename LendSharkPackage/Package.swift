@@ -1,11 +1,11 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "LendSharkFeature",
     platforms: [
-        .iOS(.v16),
-        .macOS(.v13)
+        .iOS(.v26),
+        .macOS(.v26)
     ],
     products: [
         .library(

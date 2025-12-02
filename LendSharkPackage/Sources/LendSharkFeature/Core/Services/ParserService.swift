@@ -334,6 +334,44 @@ public final class ParserService: Sendable {
         return nil
     }
     
+    /// Extract phone number from text
+    /// Supports formats: (555) 123-4567, 555-123-4567, 5551234567, 555.123.4567
+    private func extractPhoneNumber(from text: String) -> String? {
+        // Common phone patterns
+        let patterns = [
+            #"\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"#,  // (555) 123-4567 or 555-123-4567
+            #"\d{3}[-.\s]\d{4}"#,                       // 555-1234 (7 digit)
+            #"\d{10}"#                                   // 5551234567
+        ]
+        
+        for pattern in patterns {
+            if let range = text.range(of: pattern, options: .regularExpression) {
+                let match = String(text[range])
+                // Clean and format the phone number
+                let digits = match.filter { $0.isNumber }
+                if digits.count >= 7 {
+                    return formatPhoneNumber(digits)
+                }
+            }
+        }
+        return nil
+    }
+    
+    /// Format phone digits into standard format
+    private func formatPhoneNumber(_ digits: String) -> String {
+        if digits.count == 10 {
+            let areaCode = digits.prefix(3)
+            let exchange = digits.dropFirst(3).prefix(3)
+            let subscriber = digits.suffix(4)
+            return "(\(areaCode)) \(exchange)-\(subscriber)"
+        } else if digits.count == 7 {
+            let exchange = digits.prefix(3)
+            let subscriber = digits.suffix(4)
+            return "\(exchange)-\(subscriber)"
+        }
+        return digits
+    }
+    
     /// Enhanced DTO creation with modifiers
     private func createDTO(
         party: String,
@@ -348,7 +386,8 @@ public final class ParserService: Sendable {
             isItem: false,
             dueDate: extractDueDate(from: originalText),
             interestRate: extractInterestRate(from: originalText),
-            notes: extractNotes(from: originalText)
+            notes: extractNotes(from: originalText),
+            phoneNumber: extractPhoneNumber(from: originalText)
         )
     }
 }

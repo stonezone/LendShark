@@ -25,6 +25,15 @@ public struct MainTabView: View {
             }
             .tag(1)
             
+            // Due Today Tab
+            NavigationStack {
+                DueTodayView()
+            }
+            .tabItem {
+                Label("Due Today", systemImage: "calendar.badge.exclamationmark")
+            }
+            .tag(2)
+            
             // Collections Tab
             NavigationStack {
                 CollectionsView()
@@ -32,7 +41,7 @@ public struct MainTabView: View {
             .tabItem {
                 Label("Collections", systemImage: "exclamationmark.triangle.fill")
             }
-            .tag(2)
+            .tag(3)
             
             // Settlement Tab
             NavigationStack {
@@ -41,7 +50,7 @@ public struct MainTabView: View {
             .tabItem {
                 Label("Settlement", systemImage: "checkmark.circle")
             }
-            .tag(3)
+            .tag(4)
             
             // Export Tab
             NavigationStack {
@@ -50,7 +59,7 @@ public struct MainTabView: View {
             .tabItem {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
-            .tag(4)
+            .tag(5)
         }
         .tint(Color.inkBlack)
         // Debug: force tab bar to always be visible
