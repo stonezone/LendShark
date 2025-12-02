@@ -7,13 +7,19 @@ struct DueTodayView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \Transaction.dueDate, ascending: true)],
-        predicate: NSPredicate(format: "settled == false AND dueDate != nil"),
+        predicate: NSPredicate(format: "settled == false AND dueDate != nil AND direction == 1"),
         animation: .default
     ) private var transactionsWithDueDates: FetchedResults<Transaction>
+    
+    private enum DueViewMode {
+        case shortTerm      // today + tomorrow
+        case next30Days     // today + next 30 days
+    }
     
     @State private var showingSMSComposer = false
     @State private var selectedPhone: String = ""
     @State private var selectedMessage: String = ""
+    @State private var viewMode: DueViewMode = .shortTerm
     
     private var calendar: Calendar { Calendar.current }
     
@@ -25,9 +31,18 @@ struct DueTodayView: View {
                 // Header
                 headerSection
                 
-                // Total on deck summary
-                if totalOnDeck > 0 {
-                    totalSummary
+                // Mode toggle (short term vs next 30 days)
+                modeToggle
+                
+                // Total summary depending on mode
+                if viewMode == .shortTerm {
+                    if totalOnDeck > 0 {
+                        totalSummary
+                    }
+                } else {
+                    if totalNext30Days > 0 {
+                        totalNext30Summary
+                    }
                 }
                 
                 // Divider
@@ -37,24 +52,50 @@ struct DueTodayView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
                 
-                if dueToday.isEmpty && dueTomorrow.isEmpty {
-                    emptyState
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            if !dueToday.isEmpty {
-                                dueTodaySection
+                if viewMode == .shortTerm {
+                    if dueToday.isEmpty && dueTomorrow.isEmpty {
+                        emptyState
+                    } else {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 20) {
+                                if !dueToday.isEmpty {
+                                    dueTodaySection
+                                }
+                                if !dueTomorrow.isEmpty {
+                                    dueTomorrowSection
+                                }
                             }
-                            if !dueTomorrow.isEmpty {
-                                dueTomorrowSection
-                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
+                    }
+                } else {
+                    if next30DaysTransactions.isEmpty {
+                        emptyNext30State
+                    } else {
+                        ScrollView {
+                            next30DaysSection
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 20)
+                        }
                     }
                 }
             }
         }
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    let vertical = value.translation.height
+                    // Only react to primarily horizontal, sufficiently large swipes
+                    guard abs(horizontal) > abs(vertical), abs(horizontal) > 40 else { return }
+                    if horizontal < 0 {
+                        viewMode = .next30Days
+                    } else {
+                        viewMode = .shortTerm
+                    }
+                }
+        )
         #if os(iOS)
         .smsComposer(
             isPresented: $showingSMSComposer,
@@ -87,6 +128,37 @@ struct DueTodayView: View {
         .padding(.bottom, 12)
     }
     
+    // MARK: - Mode Toggle
+    
+    private var modeToggle: some View {
+        HStack(spacing: 0) {
+            modeToggleSegment(
+                title: "TODAY + TOMORROW",
+                isActive: viewMode == .shortTerm
+            ) {
+                viewMode = .shortTerm
+            }
+            
+            Rectangle()
+                .frame(width: 1, height: 26)
+                .foregroundColor(.inkBlack.opacity(0.4))
+            
+            modeToggleSegment(
+                title: "NEXT 30 DAYS",
+                isActive: viewMode == .next30Days
+            ) {
+                viewMode = .next30Days
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .overlay(
+            Rectangle()
+                .stroke(Color.inkBlack.opacity(0.5), lineWidth: 1)
+        )
+        .padding(.horizontal, 20)
+        .padding(.bottom, 10)
+    }
+    
     // MARK: - Total Summary
     
     private var totalSummary: some View {
@@ -115,6 +187,32 @@ struct DueTodayView: View {
         .padding(.bottom, 16)
     }
     
+    private var totalNext30Summary: some View {
+        HStack(alignment: .center) {
+            Text("TOTAL NEXT 30 DAYS")
+                .font(.system(size: 11, weight: .black, design: .monospaced))
+                .foregroundColor(.inkBlack)
+                .tracking(1)
+            
+            Text(String(repeating: "·", count: 6))
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(.pencilGray)
+            
+            Spacer()
+            
+            Text(formatCurrency(totalNext30Days))
+                .font(.system(size: 22, weight: .black, design: .monospaced))
+                .foregroundColor(.inkBlack)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color.inkBlack.opacity(0.04))
+        .overlay(Rectangle().stroke(Color.inkBlack, lineWidth: 1))
+        .rotationEffect(.degrees(0.3))
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+    }
+    
     // MARK: - Empty State
     
     private var emptyState: some View {
@@ -129,6 +227,25 @@ struct DueTodayView: View {
                 .foregroundColor(.pencilGray)
             
             Text("No collections scheduled for today or tomorrow.")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundColor(.pencilGray.opacity(0.7))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var emptyNext30State: some View {
+        VStack(spacing: 20) {
+            Text("—")
+                .font(.system(size: 48, weight: .ultraLight, design: .monospaced))
+                .foregroundColor(.pencilGray.opacity(0.4))
+            
+            Text("NOTHING COMING DUE")
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .tracking(3)
+                .foregroundColor(.pencilGray)
+            
+            Text("No collections scheduled in the next 30 days.")
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundColor(.pencilGray.opacity(0.7))
                 .multilineTextAlignment(.center)
@@ -176,6 +293,54 @@ struct DueTodayView: View {
             
             ForEach(groupedByPerson(dueTomorrow), id: \.name) { debtor in
                 collectionRow(debtor: debtor, urgent: false)
+            }
+        }
+    }
+    
+    // MARK: - Next 30 Days Section
+    
+    private struct DayGroup: Identifiable {
+        let id = UUID()
+        let date: Date
+        let debtors: [DebtorDue]
+    }
+    
+    private var next30DaysSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("NEXT 30 DAYS")
+                .font(.system(size: 12, weight: .black, design: .monospaced))
+                .tracking(2)
+                .foregroundColor(.inkBlack)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.inkBlack.opacity(0.08))
+                .overlay(Rectangle().stroke(Color.inkBlack, lineWidth: 1.5))
+                .rotationEffect(.degrees(0.5))
+                .padding(.top, 4)
+                .padding(.bottom, 4)
+            
+            ForEach(next30DayGroups) { group in
+                VStack(alignment: .leading, spacing: 8) {
+                    // Date header
+                    HStack {
+                        Text(group.date.formatted(date: .abbreviated, time: .omitted).uppercased())
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.pencilGray)
+                        Spacer()
+                        Text("\(group.debtors.count) \(group.debtors.count == 1 ? "debtor" : "debtors")")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(.pencilGray.opacity(0.8))
+                    }
+                    
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(.inkBlack.opacity(0.2))
+                    
+                    ForEach(group.debtors) { debtor in
+                        let urgent = calendar.isDateInToday(group.date) || calendar.isDateInTomorrow(group.date)
+                        collectionRow(debtor: debtor, urgent: urgent)
+                    }
+                }
             }
         }
     }
@@ -262,6 +427,40 @@ struct DueTodayView: View {
         return todayAmounts + tomorrowAmounts
     }
     
+    private var next30DaysTransactions: [Transaction] {
+        let today = calendar.startOfDay(for: Date())
+        let limit = calendar.date(byAdding: .day, value: 30, to: today)!
+        
+        return transactionsWithDueDates.filter { tx in
+            guard let due = tx.dueDate else { return false }
+            let dueStart = calendar.startOfDay(for: due)
+            return dueStart >= today && dueStart < limit
+        }
+    }
+    
+    private var next30DayGroups: [DayGroup] {
+        var buckets: [Date: [Transaction]] = [:]
+        let today = calendar.startOfDay(for: Date())
+        let limit = calendar.date(byAdding: .day, value: 30, to: today)!
+        
+        for tx in transactionsWithDueDates {
+            guard let due = tx.dueDate else { continue }
+            let dueStart = calendar.startOfDay(for: due)
+            guard dueStart >= today && dueStart < limit else { continue }
+            buckets[dueStart, default: []].append(tx)
+        }
+        
+        return buckets
+            .map { date, txs in
+                DayGroup(date: date, debtors: groupedByPerson(txs))
+            }
+            .sorted { $0.date < $1.date }
+    }
+    
+    private var totalNext30Days: Decimal {
+        next30DaysTransactions.compactMap { $0.amount?.decimalValue }.reduce(0, +)
+    }
+    
     // MARK: - Helpers
     
     private struct DebtorDue: Identifiable {
@@ -270,6 +469,22 @@ struct DueTodayView: View {
         let totalAmount: Decimal
         let phoneNumber: String?
         let dueDate: Date?
+    }
+    
+    private func modeToggleSegment(
+        title: String,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(isActive ? .paperYellow : .inkBlack)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(isActive ? Color.inkBlack : Color.clear)
+        }
+        .buttonStyle(.plain)
     }
     
     private func groupedByPerson(_ transactions: [Transaction]) -> [DebtorDue] {

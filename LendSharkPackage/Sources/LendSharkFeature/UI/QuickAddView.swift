@@ -316,7 +316,7 @@ public struct QuickAddView: View {
     
     private var previewText: String {
         let parser = ParserService()
-        switch parser.parse(inputText) {
+        switch parser.parse(inputText, abbreviations: settings.abbreviations) {
         case .success(let action):
             switch action {
             case .add(let dto):
@@ -388,7 +388,7 @@ public struct QuickAddView: View {
     
     private func add() {
         let parser = ParserService()
-        let result = parser.parse(inputText)
+        let result = parser.parse(inputText, abbreviations: settings.abbreviations)
         
         switch result {
         case .failure(let error):

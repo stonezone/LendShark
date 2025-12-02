@@ -30,7 +30,12 @@ public final class ParserService: Sendable {
     
     public init() {}
     
-    public func parse(_ input: String) -> Result<ParsedAction, ParsingError> {
+    /// Parse input using either provided abbreviations or internal defaults.
+    /// - Parameter abbreviations: Optional slang map (e.g. from SettingsService.abbreviations).
+    public func parse(
+        _ input: String,
+        abbreviations customAbbreviations: [String: Decimal]? = nil
+    ) -> Result<ParsedAction, ParsingError> {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             return .failure(.invalidFormat("Nothing written. Try 'john owes 50'."))
@@ -38,6 +43,7 @@ public final class ParserService: Sendable {
         
         let lower = text.lowercased()
         let words = lower.split(separator: " ").map { String($0) }
+        let abbreviations = customAbbreviations ?? Self.defaultAbbreviations
         
         // Pattern: "settle with [name]" or "settled with [name]"
         if let settleResult = parseSettle(words) {
@@ -45,27 +51,27 @@ public final class ParserService: Sendable {
         }
         
         // Pattern: "[name] owes [amount]" or "[name] owes me [amount]"
-        if let owesResult = parseOwes(words, originalText: text) {
+        if let owesResult = parseOwes(words, originalText: text, abbreviations: abbreviations) {
             return owesResult
         }
         
         // Pattern: "i owe [name] [amount]"
-        if let iOweResult = parseIOwe(words, originalText: text) {
+        if let iOweResult = parseIOwe(words, originalText: text, abbreviations: abbreviations) {
             return iOweResult
         }
         
         // Pattern: "lent [amount] to [name]"
-        if let lentResult = parseLent(words, originalText: text) {
+        if let lentResult = parseLent(words, originalText: text, abbreviations: abbreviations) {
             return lentResult
         }
         
         // Pattern: "borrowed [amount] from [name]"
-        if let borrowedResult = parseBorrowed(words, originalText: text) {
+        if let borrowedResult = parseBorrowed(words, originalText: text, abbreviations: abbreviations) {
             return borrowedResult
         }
         
         // Pattern: "[name] paid [amount]" or "paid [name] [amount]"
-        if let paidResult = parsePaid(words, originalText: text) {
+        if let paidResult = parsePaid(words, originalText: text, abbreviations: abbreviations) {
             return paidResult
         }
         
@@ -84,7 +90,11 @@ public final class ParserService: Sendable {
         return nil
     }
     
-    private func parseOwes(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
+    private func parseOwes(
+        _ words: [String],
+        originalText: String,
+        abbreviations: [String: Decimal]
+    ) -> Result<ParsedAction, ParsingError>? {
         guard let owesIdx = words.firstIndex(where: { $0 == "owes" || $0 == "owe" }) else { return nil }
         guard owesIdx > 0 else { return nil }
 
@@ -99,31 +109,39 @@ public final class ParserService: Sendable {
         guard amountIdx < words.count else { return nil }
 
         // Try two-word amount first ("2 notes"), then single word
-        if let amount = parseAmountFromWords(words, startingAt: amountIdx) {
+        if let amount = parseAmountFromWords(words, startingAt: amountIdx, abbreviations: abbreviations) {
             let dto = createDTO(party: name, amount: amount, direction: .lent, originalText: originalText)
             return .success(.add(dto))
         }
         return nil
     }
     
-    private func parseIOwe(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
+    private func parseIOwe(
+        _ words: [String],
+        originalText: String,
+        abbreviations: [String: Decimal]
+    ) -> Result<ParsedAction, ParsingError>? {
         guard words.first == "i" else { return nil }
         guard let oweIdx = words.firstIndex(of: "owe"), oweIdx + 2 < words.count else { return nil }
 
         let name = words[oweIdx + 1].capitalized
 
         // Try two-word amount first ("2 notes"), then single word
-        if let amount = parseAmountFromWords(words, startingAt: oweIdx + 2) {
+        if let amount = parseAmountFromWords(words, startingAt: oweIdx + 2, abbreviations: abbreviations) {
             let dto = createDTO(party: name, amount: amount, direction: .borrowed, originalText: originalText)
             return .success(.add(dto))
         }
         return nil
     }
     
-    private func parseLent(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
+    private func parseLent(
+        _ words: [String],
+        originalText: String,
+        abbreviations: [String: Decimal]
+    ) -> Result<ParsedAction, ParsingError>? {
         guard let lentIdx = words.firstIndex(of: "lent"), lentIdx + 1 < words.count else { return nil }
 
-        guard let amount = parseAmountFromWords(words, startingAt: lentIdx + 1) else { return nil }
+        guard let amount = parseAmountFromWords(words, startingAt: lentIdx + 1, abbreviations: abbreviations) else { return nil }
 
         if let toIdx = words.firstIndex(of: "to"), toIdx + 1 < words.count {
             let name = words[toIdx + 1].capitalized
@@ -133,10 +151,14 @@ public final class ParserService: Sendable {
         return nil
     }
     
-    private func parseBorrowed(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
+    private func parseBorrowed(
+        _ words: [String],
+        originalText: String,
+        abbreviations: [String: Decimal]
+    ) -> Result<ParsedAction, ParsingError>? {
         guard let borrowedIdx = words.firstIndex(of: "borrowed"), borrowedIdx + 1 < words.count else { return nil }
 
-        guard let amount = parseAmountFromWords(words, startingAt: borrowedIdx + 1) else { return nil }
+        guard let amount = parseAmountFromWords(words, startingAt: borrowedIdx + 1, abbreviations: abbreviations) else { return nil }
 
         if let fromIdx = words.firstIndex(of: "from"), fromIdx + 1 < words.count {
             let name = words[fromIdx + 1].capitalized
@@ -146,14 +168,19 @@ public final class ParserService: Sendable {
         return nil
     }
     
-    private func parsePaid(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
+    private func parsePaid(
+        _ words: [String],
+        originalText: String,
+        abbreviations: [String: Decimal]
+    ) -> Result<ParsedAction, ParsingError>? {
         guard let paidIdx = words.firstIndex(of: "paid") else { return nil }
 
         // "[name] paid [amount]" - partial payment (creates counter-transaction)
         // Pattern: "john paid 50" or "john paid 2 notes"
         if paidIdx > 0 {
             let name = words[paidIdx - 1].capitalized
-            if paidIdx + 1 < words.count, let amount = parseAmountFromWords(words, startingAt: paidIdx + 1) {
+            if paidIdx + 1 < words.count,
+               let amount = parseAmountFromWords(words, startingAt: paidIdx + 1, abbreviations: abbreviations) {
                 // Create partial payment - direction .borrowed means they paid us (reduces debt)
                 let dto = TransactionDTO(
                     party: name,
@@ -173,7 +200,8 @@ public final class ParserService: Sendable {
         if paidIdx + 1 < words.count {
             let name = words[paidIdx + 1].capitalized
             // Check if there's an amount after name
-            if paidIdx + 2 < words.count, let amount = parseAmountFromWords(words, startingAt: paidIdx + 2) {
+            if paidIdx + 2 < words.count,
+               let amount = parseAmountFromWords(words, startingAt: paidIdx + 2, abbreviations: abbreviations) {
                 let dto = TransactionDTO(
                     party: name,
                     amount: amount,
@@ -206,7 +234,11 @@ public final class ParserService: Sendable {
     ]
 
     /// Try to parse amount from words array, checking two-word patterns first ("2 notes"), then single word
-    private func parseAmountFromWords(_ words: [String], startingAt idx: Int) -> Decimal? {
+    private func parseAmountFromWords(
+        _ words: [String],
+        startingAt idx: Int,
+        abbreviations: [String: Decimal]
+    ) -> Decimal? {
         guard idx < words.count else { return nil }
 
         // Try two-word pattern first: "2 notes", "3 bucks", etc.
@@ -218,17 +250,20 @@ public final class ParserService: Sendable {
             if let multiplier = Decimal(string: numStr) {
                 // Strip trailing 's' for plural forms
                 let stripped = unitStr.replacingOccurrences(of: "s$", with: "", options: .regularExpression)
-                if let value = Self.defaultAbbreviations[stripped] {
+                if let value = abbreviations[stripped] {
                     return multiplier * value
                 }
             }
         }
 
         // Fall back to single-word parsing
-        return parseAmount(words[idx])
+        return parseAmount(words[idx], abbreviations: abbreviations)
     }
-
-    private func parseAmount(_ token: String) -> Decimal? {
+    
+    private func parseAmount(
+        _ token: String,
+        abbreviations: [String: Decimal]
+    ) -> Decimal? {
         let lower = token.lowercased()
 
         // Try direct number first
@@ -238,7 +273,7 @@ public final class ParserService: Sendable {
         }
 
         // Check abbreviations with multiplier (e.g., "2notes", "3k")
-        for (abbr, value) in Self.defaultAbbreviations {
+        for (abbr, value) in abbreviations {
             // Pattern: "2notes" or "2 notes"
             if lower.hasSuffix(abbr) || lower.hasSuffix(abbr + "s") {
                 let suffix = lower.hasSuffix(abbr + "s") ? abbr + "s" : abbr
@@ -251,7 +286,7 @@ public final class ParserService: Sendable {
 
         // Check direct abbreviation match
         let stripped = lower.replacingOccurrences(of: "s$", with: "", options: .regularExpression)
-        if let value = Self.defaultAbbreviations[stripped] {
+        if let value = abbreviations[stripped] {
             return value
         }
 

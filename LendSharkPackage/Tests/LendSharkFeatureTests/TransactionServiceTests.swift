@@ -438,7 +438,7 @@ class MockPersistenceController: PersistenceController {
             id: transaction.id ?? UUID(),
             party: transaction.party ?? "",
             amount: transaction.amount?.decimalValue,
-            direction: TransactionDirection(rawValue: Int(transaction.direction)) ?? .lent,
+            direction: TransactionDTO.TransactionDirection(rawValue: Int(transaction.direction)) ?? .lent,
             item: transaction.item,
             isItem: transaction.isItem,
             settled: transaction.settled,

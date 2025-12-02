@@ -52,12 +52,13 @@ struct DebtLedger {
             guard let party = transaction.party, !party.isEmpty else { continue }
             
             let amount = transaction.amount as? Decimal ?? 0
-            let direction = TransactionDirection(rawValue: transaction.direction) ?? .owedToMe
-            let debtAmount = direction == .owedToMe ? amount : -amount
+            // Use DTO-level direction to avoid drift between enums
+            let direction = TransactionDTO.TransactionDirection(rawValue: Int(transaction.direction)) ?? .lent
+            let debtAmount = direction == .lent ? amount : -amount
             
             // Calculate interest if rate is set
             var interestAmount: Decimal = 0
-            if let rate = transaction.interestRate as? Decimal, 
+            if let rate = transaction.interestRate as? Decimal,
                let timestamp = transaction.timestamp,
                debtAmount > 0 {
                 let weeks = Decimal(Calendar.current.dateComponents([.day], from: timestamp, to: now).day ?? 0) / 7
@@ -136,21 +137,6 @@ struct DebtLedger {
             
             // Both overdue or both not overdue - sort by amount descending
             return lhs.totalOwed > rhs.totalOwed
-        }
-    }
-}
-
-/// Transaction direction enum for clarity
-enum TransactionDirection: Int16, CaseIterable {
-    case owedToMe = 1
-    case iOwe = -1
-    
-    var description: String {
-        switch self {
-        case .owedToMe:
-            return "Owed to Me"
-        case .iOwe:
-            return "I Owe"
         }
     }
 }

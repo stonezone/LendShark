@@ -419,7 +419,7 @@ final class ExportServiceTests: XCTestCase {
     private func createLargeTransactionDataset(count: Int) -> [TransactionDTO] {
         var transactions: [TransactionDTO] = []
         let parties = ["John", "Sarah", "Mike", "Alice", "Bob", "Carol", "David", "Eva"]
-        let directions: [TransactionDirection] = [.lent, .borrowed]
+        let directions: [TransactionDTO.TransactionDirection] = [.lent, .borrowed]
         let notes = ["Lunch", "Gas", "Coffee", "Movie", "Dinner", "Groceries", "Books", "Travel"]
         
         for i in 0..<count {

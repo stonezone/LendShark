@@ -24,32 +24,16 @@ struct DebtorDetailView: View {
         )
     }
     
+    private var debtorInfo: DebtLedger.DebtorInfo? {
+        DebtLedger.getDebtors(from: Array(transactions)).first
+    }
+    
     private var totalOwed: Decimal {
-        transactions.filter { !$0.settled }.reduce(Decimal.zero) { total, t in
-            let amount = t.amount?.decimalValue ?? 0
-            let direction: Decimal = t.direction == 1 ? 1 : -1
-            return total + (amount * direction)
-        }
+        debtorInfo?.principal ?? 0
     }
     
     private var totalWithInterest: Decimal {
-        let now = Date()
-        return transactions.filter { !$0.settled }.reduce(Decimal.zero) { total, t in
-            let amount = t.amount?.decimalValue ?? 0
-            let direction: Decimal = t.direction == 1 ? 1 : -1
-            let principal = amount * direction
-            
-            // Calculate interest
-            var interest: Decimal = 0
-            if let rate = t.interestRate?.decimalValue,
-               let timestamp = t.timestamp,
-               principal > 0 {
-                let weeks = Decimal(Calendar.current.dateComponents([.day], from: timestamp, to: now).day ?? 0) / 7
-                interest = principal * rate * weeks
-            }
-            
-            return total + principal + interest
-        }
+        debtorInfo?.totalOwed ?? totalOwed
     }
     
     var body: some View {
