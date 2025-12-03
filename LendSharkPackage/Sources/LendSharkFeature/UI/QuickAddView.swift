@@ -544,23 +544,27 @@ public struct QuickAddView: View {
             CNContactPhoneNumbersKey as CNKeyDescriptor
         ]
         
-        Task { @MainActor in
-            let status = CNContactStore.authorizationStatus(for: .contacts)
-            switch status {
-            case .notDetermined:
-                do {
-                    let granted = try await store.requestAccess(for: .contacts)
-                    if granted {
-                        loadContacts(from: store, keys: keys)
-                    }
-                } catch {
-                    break
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        switch status {
+        case .notDetermined:
+            store.requestAccess(for: .contacts) { granted, _ in
+                guard granted else { return }
+                let results = self.fetchContacts(from: store, keys: keys)
+                DispatchQueue.main.async {
+                    self.contactSuggestions = results
+                    self.contactsLoaded = true
+                    self.updateSuggestions(for: self.inputText)
                 }
-            case .authorized:
-                loadContacts(from: store, keys: keys)
-            default:
-                break
             }
+        case .authorized:
+            let results = fetchContacts(from: store, keys: keys)
+            DispatchQueue.main.async {
+                self.contactSuggestions = results
+                self.contactsLoaded = true
+                self.updateSuggestions(for: self.inputText)
+            }
+        default:
+            break
         }
     }
     
@@ -570,7 +574,7 @@ public struct QuickAddView: View {
         detectNameInInput(inputText)
     }
     
-    private func loadContacts(from store: CNContactStore, keys: [CNKeyDescriptor]) {
+    private func fetchContacts(from store: CNContactStore, keys: [CNKeyDescriptor]) -> [ContactCandidate] {
         let request = CNContactFetchRequest(keysToFetch: keys)
         var results: [ContactCandidate] = []
         
@@ -597,11 +601,7 @@ public struct QuickAddView: View {
             // Ignore contact errors – suggestions are optional
         }
         
-        DispatchQueue.main.async {
-            self.contactSuggestions = results
-            self.contactsLoaded = true
-            updateSuggestions(for: inputText)
-        }
+        return results
     }
     
     private func updateSuggestions(for text: String) {
