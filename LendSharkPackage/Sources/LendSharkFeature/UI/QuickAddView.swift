@@ -439,7 +439,14 @@ public struct QuickAddView: View {
     @ViewBuilder
     private var quickAddTextField: some View {
         #if os(iOS)
-        baseQuickAddTextField
+        VStack(alignment: .leading, spacing: 0) {
+            baseQuickAddTextField
+            
+            if !suggestions.isEmpty {
+                suggestionPanel
+                    .padding(.top, 4)
+            }
+        }
         #else
         baseQuickAddTextField
         #endif
@@ -488,6 +495,45 @@ public struct QuickAddView: View {
         }
     }
     
+    private var suggestionPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(suggestions.prefix(5)) { suggestion in
+                Button(action: {
+                    applySuggestion(suggestion)
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: suggestion.iconSystemName)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.inkBlack)
+                        
+                        Text(suggestion.displayLabel)
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .foregroundColor(.inkBlack)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                
+                if suggestion.id != suggestions.prefix(5).last?.id {
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(.inkBlack.opacity(0.15))
+                        .padding(.horizontal, 4)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .background(.ultraThinMaterial)
+        .overlay(
+            Rectangle()
+                .stroke(Color.inkBlack.opacity(0.4), lineWidth: 1)
+        )
+    }
+    
     private func loadContactsIfNeeded() {
         guard !contactsLoaded else { return }
         
@@ -516,6 +562,12 @@ public struct QuickAddView: View {
                 break
             }
         }
+    }
+    
+    private func applySuggestion(_ suggestion: QuickAddSuggestion) {
+        inputText = suggestion.completionText
+        // Re-run detection and suggestions for the new value
+        detectNameInInput(inputText)
     }
     
     private func loadContacts(from store: CNContactStore, keys: [CNKeyDescriptor]) {
