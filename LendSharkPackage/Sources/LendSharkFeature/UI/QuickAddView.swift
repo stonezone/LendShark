@@ -1,5 +1,8 @@
 import SwiftUI
 import CoreData
+#if os(iOS)
+import Contacts
+#endif
 
 /// Quick Add Debt - single field, simple parser + tap-to-build UI
 public struct QuickAddView: View {
@@ -14,6 +17,13 @@ public struct QuickAddView: View {
     @State private var detectedName: String?
     @State private var selectedDirection: TransactionDTO.TransactionDirection?
     @State private var selectedAmount: Decimal?
+
+    #if os(iOS)
+    // Contact-based suggestions (iOS only)
+    @State private var contactsLoaded = false
+    @State private var contactSuggestions: [ContactCandidate] = []
+    @State private var suggestions: [QuickAddSuggestion] = []
+    #endif
 
     public init() {}
 
@@ -49,19 +59,7 @@ public struct QuickAddView: View {
                         .foregroundColor(.pencilGray)
                         .tracking(1)
 
-                    TextField("john owes 50 due 2 weeks at 10%", text: $inputText)
-                        .font(.system(size: 17, weight: .medium, design: .monospaced))
-                        .foregroundColor(.inkBlack)
-                        .textFieldStyle(.plain)
-                        .padding(.vertical, 12)
-                        .focused($isInputFocused)
-                        .onChange(of: inputText) { newValue in
-                            detectNameInInput(newValue)
-                        }
-                        .onSubmit {
-                            add()
-                            isInputFocused = false
-                        }
+                    quickAddTextField
 
                     // Pencil underline effect
                     Rectangle()
@@ -137,6 +135,11 @@ public struct QuickAddView: View {
                 Spacer()
             }
             .padding(24)
+            #if os(iOS)
+            .onAppear {
+                loadContactsIfNeeded()
+            }
+            #endif
         }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
@@ -376,6 +379,10 @@ public struct QuickAddView: View {
             // Just a name entered
             detectedName = String(words[0])
         }
+        
+        #if os(iOS)
+        updateSuggestions(for: input)
+        #endif
     }
     
     private func appendToInput(_ text: String) {
@@ -426,4 +433,218 @@ public struct QuickAddView: View {
             }
         }
     }
+
+    // MARK: - Base TextField + Suggestions (iOS)
+    
+    @ViewBuilder
+    private var quickAddTextField: some View {
+        #if os(iOS)
+        baseQuickAddTextField
+        #else
+        baseQuickAddTextField
+        #endif
+    }
+    
+    private var baseQuickAddTextField: some View {
+        TextField("john owes 50 due 2 weeks at 10%", text: $inputText)
+            .font(.system(size: 17, weight: .medium, design: .monospaced))
+            .foregroundColor(.inkBlack)
+            .textFieldStyle(.plain)
+            .padding(.vertical, 12)
+            .focused($isInputFocused)
+            .onChange(of: inputText) { newValue in
+                detectNameInInput(newValue)
+            }
+            .onSubmit {
+                add()
+                isInputFocused = false
+            }
+    }
+
+    // MARK: - Contacts + Suggestion Model (iOS)
+    
+    #if os(iOS)
+    private struct ContactCandidate {
+        let name: String
+        let phoneNumbers: [String]
+    }
+    
+    private struct QuickAddSuggestion: Identifiable {
+        enum Kind {
+            case name
+            case phone
+        }
+        
+        let id = UUID()
+        let kind: Kind
+        let displayLabel: String
+        let completionText: String
+        
+        var iconSystemName: String {
+            switch kind {
+            case .name: return "person.fill"
+            case .phone: return "phone.fill"
+            }
+        }
+    }
+    
+    private func loadContactsIfNeeded() {
+        guard !contactsLoaded else { return }
+        
+        let store = CNContactStore()
+        let keys: [CNKeyDescriptor] = [
+            CNContactGivenNameKey as CNKeyDescriptor,
+            CNContactFamilyNameKey as CNKeyDescriptor,
+            CNContactPhoneNumbersKey as CNKeyDescriptor
+        ]
+        
+        Task { @MainActor in
+            let status = CNContactStore.authorizationStatus(for: .contacts)
+            switch status {
+            case .notDetermined:
+                do {
+                    let granted = try await store.requestAccess(for: .contacts)
+                    if granted {
+                        loadContacts(from: store, keys: keys)
+                    }
+                } catch {
+                    break
+                }
+            case .authorized:
+                loadContacts(from: store, keys: keys)
+            default:
+                break
+            }
+        }
+    }
+    
+    private func loadContacts(from store: CNContactStore, keys: [CNKeyDescriptor]) {
+        let request = CNContactFetchRequest(keysToFetch: keys)
+        var results: [ContactCandidate] = []
+        
+        do {
+            try store.enumerateContacts(with: request) { contact, _ in
+                var fullName = contact.givenName
+                if !contact.familyName.isEmpty {
+                    if !fullName.isEmpty {
+                        fullName += " "
+                    }
+                    fullName += contact.familyName
+                }
+                if fullName.isEmpty {
+                    fullName = contact.organizationName
+                }
+                guard !fullName.isEmpty else { return }
+                
+                let phones = contact.phoneNumbers.map { $0.value.stringValue }.filter { !$0.isEmpty }
+                guard !phones.isEmpty else { return }
+                
+                results.append(ContactCandidate(name: fullName, phoneNumbers: phones))
+            }
+        } catch {
+            // Ignore contact errors – suggestions are optional
+        }
+        
+        DispatchQueue.main.async {
+            self.contactSuggestions = results
+            self.contactsLoaded = true
+            updateSuggestions(for: inputText)
+        }
+    }
+    
+    private func updateSuggestions(for text: String) {
+        guard contactsLoaded, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            suggestions = []
+            return
+        }
+        
+        let lower = text.lowercased()
+        
+        // Find first keyword position to split name segment
+        let keywords = [" owes", " owe", " lent", " borrowed", " paid", " pay "]
+        var nameEndIndex: String.Index? = nil
+        for keyword in keywords {
+            if let range = lower.range(of: keyword) {
+                if nameEndIndex == nil || range.lowerBound < nameEndIndex! {
+                    nameEndIndex = range.lowerBound
+                }
+            }
+        }
+        
+        let nameSegmentRange = text.startIndex ..< (nameEndIndex ?? text.endIndex)
+        let nameSegment = text[nameSegmentRange].trimmingCharacters(in: .whitespaces)
+        
+        let tokens = text.split(whereSeparator: { $0.isWhitespace })
+        let currentToken = tokens.last.map(String.init) ?? ""
+        let digitSet = CharacterSet.decimalDigits.union(CharacterSet(charactersIn: "+()-." ))
+        let isPhoneContext = !currentToken.isEmpty &&
+            currentToken.unicodeScalars.allSatisfy { digitSet.contains($0) }
+        
+        var newSuggestions: [QuickAddSuggestion] = []
+        
+        // Name suggestions when we're still in the leading segment
+        if !nameSegment.isEmpty, !isPhoneContext {
+            let query = nameSegment.lowercased()
+            let matches = contactSuggestions.filter { candidate in
+                let lowerName = candidate.name.lowercased()
+                return lowerName.hasPrefix(query) || lowerName.contains(query)
+            }
+            .prefix(5)
+            
+            for candidate in matches {
+                let rest = text[nameSegmentRange.upperBound...]
+                let completion = candidate.name + rest
+                let label = candidate.name.uppercased()
+                newSuggestions.append(
+                    QuickAddSuggestion(
+                        kind: .name,
+                        displayLabel: label,
+                        completionText: completion
+                    )
+                )
+            }
+        }
+        
+        // Phone suggestions when user is typing digits
+        if isPhoneContext, !currentToken.isEmpty {
+            let digitsOnly = currentToken.filter { $0.isNumber }
+            guard let tokenRange = lower.range(of: currentToken.lowercased(), options: .backwards) else {
+                suggestions = newSuggestions
+                return
+            }
+            
+            // If we have a name segment that matches a contact, prioritize their numbers
+            let nameQuery = nameSegment.lowercased()
+            let prioritizedContacts: [ContactCandidate]
+            if !nameQuery.isEmpty {
+                let matching = contactSuggestions.filter { $0.name.lowercased().contains(nameQuery) }
+                prioritizedContacts = matching.isEmpty ? contactSuggestions : matching
+            } else {
+                prioritizedContacts = contactSuggestions
+            }
+            
+            for candidate in prioritizedContacts {
+                for phone in candidate.phoneNumbers {
+                    let phoneDigits = phone.filter { $0.isNumber }
+                    guard phoneDigits.hasPrefix(digitsOnly) else { continue }
+                    
+                    let before = text[..<tokenRange.lowerBound]
+                    let after = text[tokenRange.upperBound...]
+                    let completion = before + phone + after
+                    let label = "\(candidate.name.uppercased()) • \(phone)"
+                    
+                    newSuggestions.append(
+                        QuickAddSuggestion(
+                            kind: .phone,
+                            displayLabel: label,
+                            completionText: String(completion)
+                        )
+                    )
+                }
+            }
+        }
+        
+        suggestions = newSuggestions
+    }
+    #endif
 }
