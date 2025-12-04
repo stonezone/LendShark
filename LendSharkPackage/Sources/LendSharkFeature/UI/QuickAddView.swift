@@ -541,8 +541,7 @@ public struct QuickAddView: View {
         let keys: [CNKeyDescriptor] = [
             CNContactGivenNameKey as CNKeyDescriptor,
             CNContactFamilyNameKey as CNKeyDescriptor,
-            CNContactPhoneNumbersKey as CNKeyDescriptor,
-            CNContactOrganizationNameKey as CNKeyDescriptor
+            CNContactPhoneNumbersKey as CNKeyDescriptor
         ]
         
         let fetchAndUpdate: () -> Void = {
@@ -589,9 +588,7 @@ public struct QuickAddView: View {
                     }
                     fullName += contact.familyName
                 }
-                if fullName.isEmpty {
-                    fullName = contact.organizationName
-                }
+                // If there is no given/family name, skip this contact entirely
                 guard !fullName.isEmpty else { return }
                 
                 let phones = contact.phoneNumbers.map { $0.value.stringValue }.filter { !$0.isEmpty }
