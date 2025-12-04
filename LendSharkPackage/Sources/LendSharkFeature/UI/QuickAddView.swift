@@ -541,14 +541,12 @@ public struct QuickAddView: View {
         let keys: [CNKeyDescriptor] = [
             CNContactGivenNameKey as CNKeyDescriptor,
             CNContactFamilyNameKey as CNKeyDescriptor,
-            CNContactPhoneNumbersKey as CNKeyDescriptor
+            CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactOrganizationNameKey as CNKeyDescriptor
         ]
         
-        let status = CNContactStore.authorizationStatus(for: .contacts)
-        switch status {
-        case .notDetermined:
-            store.requestAccess(for: .contacts) { granted, _ in
-                guard granted else { return }
+        let fetchAndUpdate: () -> Void = {
+            DispatchQueue.global(qos: .userInitiated).async {
                 let results = self.fetchContacts(from: store, keys: keys)
                 DispatchQueue.main.async {
                     self.contactSuggestions = results
@@ -556,13 +554,17 @@ public struct QuickAddView: View {
                     self.updateSuggestions(for: self.inputText)
                 }
             }
-        case .authorized:
-            let results = fetchContacts(from: store, keys: keys)
-            DispatchQueue.main.async {
-                self.contactSuggestions = results
-                self.contactsLoaded = true
-                self.updateSuggestions(for: self.inputText)
+        }
+        
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        switch status {
+        case .notDetermined:
+            store.requestAccess(for: .contacts) { granted, _ in
+                guard granted else { return }
+                fetchAndUpdate()
             }
+        case .authorized:
+            fetchAndUpdate()
         default:
             break
         }
