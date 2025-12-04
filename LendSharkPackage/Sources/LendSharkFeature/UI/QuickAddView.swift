@@ -23,6 +23,7 @@ public struct QuickAddView: View {
     @State private var contactsLoaded = false
     @State private var contactSuggestions: [ContactCandidate] = []
     @State private var suggestions: [QuickAddSuggestion] = []
+    @State private var suggestionWeights: [String: Int] = [:]
     #endif
 
     public init() {}
@@ -138,6 +139,7 @@ public struct QuickAddView: View {
             #if os(iOS)
             .onAppear {
                 loadContactsIfNeeded()
+                loadSuggestionWeights()
             }
             #endif
         }
@@ -484,6 +486,7 @@ public struct QuickAddView: View {
         
         let id = UUID()
         let kind: Kind
+        let contactName: String
         let displayLabel: String
         let completionText: String
         
@@ -571,6 +574,7 @@ public struct QuickAddView: View {
     
     private func applySuggestion(_ suggestion: QuickAddSuggestion) {
         inputText = suggestion.completionText
+        bumpSuggestionWeight(for: suggestion.contactName)
         // Re-run detection and suggestions for the new value
         detectNameInInput(inputText)
     }
@@ -603,6 +607,21 @@ public struct QuickAddView: View {
         return results
     }
     
+    private func loadSuggestionWeights() {
+        if let dict = UserDefaults.standard.dictionary(forKey: "QuickAddSuggestionWeights") as? [String: Int] {
+            suggestionWeights = dict
+        } else {
+            suggestionWeights = [:]
+        }
+    }
+    
+    private func bumpSuggestionWeight(for name: String) {
+        var weights = suggestionWeights
+        weights[name, default: 0] += 1
+        suggestionWeights = weights
+        UserDefaults.standard.set(weights, forKey: "QuickAddSuggestionWeights")
+    }
+    
     private func updateSuggestions(for text: String) {
         guard contactsLoaded, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             suggestions = []
@@ -632,23 +651,44 @@ public struct QuickAddView: View {
             currentToken.unicodeScalars.allSatisfy { digitSet.contains($0) }
         
         var newSuggestions: [QuickAddSuggestion] = []
+        let normalizedNameSegment = nameSegment.lowercased().trimmingCharacters(in: .whitespaces)
         
         // Name suggestions when we're still in the leading segment
         if !nameSegment.isEmpty, !isPhoneContext {
-            let query = nameSegment.lowercased()
-            let matches = contactSuggestions.filter { candidate in
+            let query = normalizedNameSegment
+            
+            var matches = contactSuggestions.filter { candidate in
                 let lowerName = candidate.name.lowercased()
+                // Skip if we've already fully typed this name
+                guard lowerName != normalizedNameSegment else { return false }
                 return lowerName.hasPrefix(query) || lowerName.contains(query)
             }
-            .prefix(5)
             
-            for candidate in matches {
+            // Sort by: prefix match, weight, then name
+            matches.sort { lhs, rhs in
+                let lhsLower = lhs.name.lowercased()
+                let rhsLower = rhs.name.lowercased()
+                let lhsIsPrefix = lhsLower.hasPrefix(query)
+                let rhsIsPrefix = rhsLower.hasPrefix(query)
+                if lhsIsPrefix != rhsIsPrefix {
+                    return lhsIsPrefix
+                }
+                let lhsWeight = suggestionWeights[lhs.name] ?? 0
+                let rhsWeight = suggestionWeights[rhs.name] ?? 0
+                if lhsWeight != rhsWeight {
+                    return lhsWeight > rhsWeight
+                }
+                return lhs.name < rhs.name
+            }
+            
+            for candidate in matches.prefix(5) {
                 let rest = text[nameSegmentRange.upperBound...]
                 let completion = candidate.name + rest
                 let label = candidate.name.uppercased()
                 newSuggestions.append(
                     QuickAddSuggestion(
                         kind: .name,
+                        contactName: candidate.name,
                         displayLabel: label,
                         completionText: completion
                     )
@@ -666,12 +706,22 @@ public struct QuickAddView: View {
             
             // If we have a name segment that matches a contact, prioritize their numbers
             let nameQuery = nameSegment.lowercased()
-            let prioritizedContacts: [ContactCandidate]
+            var prioritizedContacts: [ContactCandidate]
             if !nameQuery.isEmpty {
                 let matching = contactSuggestions.filter { $0.name.lowercased().contains(nameQuery) }
                 prioritizedContacts = matching.isEmpty ? contactSuggestions : matching
             } else {
                 prioritizedContacts = contactSuggestions
+            }
+            
+            // Sort phone suggestions by weight and name
+            prioritizedContacts.sort { lhs, rhs in
+                let lhsWeight = suggestionWeights[lhs.name] ?? 0
+                let rhsWeight = suggestionWeights[rhs.name] ?? 0
+                if lhsWeight != rhsWeight {
+                    return lhsWeight > rhsWeight
+                }
+                return lhs.name < rhs.name
             }
             
             for candidate in prioritizedContacts {
@@ -687,6 +737,7 @@ public struct QuickAddView: View {
                     newSuggestions.append(
                         QuickAddSuggestion(
                             kind: .phone,
+                            contactName: candidate.name,
                             displayLabel: label,
                             completionText: String(completion)
                         )

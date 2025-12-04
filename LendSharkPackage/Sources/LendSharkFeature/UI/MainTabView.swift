@@ -43,23 +43,14 @@ public struct MainTabView: View {
             }
             .tag(3)
             
-            // Settlement Tab
+            // Tools Tab (Settlement, Export, etc.)
             NavigationStack {
-                SettlementRootView()
+                ToolsView()
             }
             .tabItem {
-                Label("Settlement", systemImage: "checkmark.circle")
+                Label("Tools", systemImage: "ellipsis.circle")
             }
             .tag(4)
-            
-            // Export Tab
-            NavigationStack {
-                ExportView()
-            }
-            .tabItem {
-                Label("Export", systemImage: "square.and.arrow.up")
-            }
-            .tag(5)
         }
         .tint(Color.inkBlack)
         // Debug: force tab bar to always be visible
