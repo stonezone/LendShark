@@ -122,12 +122,17 @@ extension Color {
         default:
             (a, r, g, b) = (255, 0, 0, 0)
         }
+        // Clamp to valid 0...255 range to avoid out-of-range UIColor components
+        let clamp: (UInt64) -> Double = { value in
+            let clamped = min(max(value, 0), 255)
+            return Double(clamped) / 255.0
+        }
         self.init(
             .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
+            red: clamp(r),
+            green: clamp(g),
+            blue: clamp(b),
+            opacity: clamp(a)
         )
     }
 }

@@ -530,7 +530,7 @@ public struct QuickAddView: View {
             }
         }
         .padding(.vertical, 4)
-        .background(.ultraThinMaterial)
+        .background(Color.paperYellow.opacity(0.9))
         .overlay(
             Rectangle()
                 .stroke(Color.inkBlack.opacity(0.4), lineWidth: 1)
