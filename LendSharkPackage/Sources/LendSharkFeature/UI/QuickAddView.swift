@@ -575,7 +575,7 @@ public struct QuickAddView: View {
         detectNameInInput(inputText)
     }
     
-    private func fetchContacts(from store: CNContactStore, keys: [CNKeyDescriptor]) -> [ContactCandidate] {
+    nonisolated private func fetchContacts(from store: CNContactStore, keys: [CNKeyDescriptor]) -> [ContactCandidate] {
         let request = CNContactFetchRequest(keysToFetch: keys)
         var results: [ContactCandidate] = []
         
