@@ -161,7 +161,9 @@ public final class PersistenceController: Sendable {
             settled: transaction.settled,
             timestamp: transaction.timestamp ?? Date(),
             dueDate: transaction.dueDate,
+            interestRate: transaction.interestRate as? Decimal,
             notes: transaction.notes,
+            phoneNumber: transaction.phoneNumber,
             cloudKitRecordID: transaction.cloudKitRecordID
         )
     }
@@ -177,7 +179,9 @@ public final class PersistenceController: Sendable {
         transaction.settled = dto.settled
         transaction.timestamp = dto.timestamp
         transaction.dueDate = dto.dueDate
+        transaction.interestRate = dto.interestRate.map { NSDecimalNumber(decimal: $0) }
         transaction.notes = dto.notes
+        transaction.phoneNumber = dto.phoneNumber
         transaction.cloudKitRecordID = dto.cloudKitRecordID
         return transaction
     }
