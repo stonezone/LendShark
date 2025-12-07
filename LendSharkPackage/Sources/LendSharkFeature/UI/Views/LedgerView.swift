@@ -142,7 +142,7 @@ struct LedgerView: View {
         .onAppear {
             updateDebtors()
         }
-        .onChange(of: transactions.count) { _ in
+        .onChange(of: transactions.count) {
             updateDebtors()
         }
         #if os(iOS)

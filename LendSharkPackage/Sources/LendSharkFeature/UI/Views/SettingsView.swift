@@ -20,7 +20,7 @@ public struct SettingsView: View {
             Section {
                 Toggle("Notifications", isOn: $settingsService.enableNotifications)
                     .tint(.inkBlack)
-                    .onChange(of: settingsService.enableNotifications) { newValue in
+                    .onChange(of: settingsService.enableNotifications) { oldValue, newValue in
                         if newValue {
                             settingsService.scheduleNotifications()
                         } else {

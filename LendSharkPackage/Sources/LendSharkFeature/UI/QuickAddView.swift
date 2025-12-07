@@ -418,6 +418,7 @@ public struct QuickAddView: View {
                     t.dueDate = dto.dueDate
                     t.interestRate = dto.interestRate.map { NSDecimalNumber(decimal: $0) }
                     t.notes = dto.notes
+                    t.phoneNumber = dto.phoneNumber // FIX: Save phone number!
                     try viewContext.save()
                 case .settle(let name):
                     try Transaction.settleAll(with: name, in: viewContext)
@@ -461,7 +462,7 @@ public struct QuickAddView: View {
             .textFieldStyle(.plain)
             .padding(.vertical, 12)
             .focused($isInputFocused)
-            .onChange(of: inputText) { newValue in
+            .onChange(of: inputText) { oldValue, newValue in
                 detectNameInInput(newValue)
             }
             .onSubmit {

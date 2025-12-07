@@ -69,7 +69,7 @@ extension Transaction {
         settlement.amount = NSDecimalNumber(decimal: amount)
         settlement.direction = -1 // Payment TO me (reduces their debt)
         settlement.isItem = false
-        settlement.settled = true // Payments are already settled
+        settlement.settled = false // Must be false so DebtLedger includes it in calculations!
         settlement.timestamp = Date()
         settlement.notes = "Partial payment"
         

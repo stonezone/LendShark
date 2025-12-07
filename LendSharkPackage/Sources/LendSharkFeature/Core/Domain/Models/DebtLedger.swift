@@ -56,13 +56,13 @@ struct DebtLedger {
             let direction = TransactionDTO.TransactionDirection(rawValue: Int(transaction.direction)) ?? .lent
             let debtAmount = direction == .lent ? amount : -amount
             
-            // Calculate interest if rate is set
-            var interestAmount: Decimal = 0
-            if let rate = transaction.interestRate as? Decimal,
-               let timestamp = transaction.timestamp,
-               debtAmount > 0 {
-                let weeks = Decimal(Calendar.current.dateComponents([.day], from: timestamp, to: now).day ?? 0) / 7
-                interestAmount = debtAmount * rate * weeks
+            // Calculate interest so far using centralised helper.
+            // Only track vig for money that others owe me.
+            let interestAmount: Decimal
+            if debtAmount > 0 {
+                interestAmount = InterestCalculator.interestSoFar(for: transaction, asOf: now)
+            } else {
+                interestAmount = 0
             }
             
             if var existing = debtorMap[party] {

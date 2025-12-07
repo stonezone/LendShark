@@ -42,7 +42,7 @@ struct CollectionsView: View {
             }
         }
         .onAppear { updateDebtors() }
-        .onChange(of: transactions.count) { _ in updateDebtors() }
+        .onChange(of: transactions.count) { updateDebtors() }
         .sheet(isPresented: $showingSettlement) {
             if let debtor = selectedDebtor {
                 SettlementView(debtor: debtor, onDismiss: {

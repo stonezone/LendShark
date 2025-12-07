@@ -187,7 +187,7 @@ public final class ParserService: Sendable {
                     amount: amount,
                     direction: .borrowed, // Payment FROM them TO us
                     isItem: false,
-                    settled: true, // Payments are already "settled"
+                    settled: false, // Must be false so DebtLedger includes it in calculations!
                     notes: "Partial payment"
                 )
                 return .success(.add(dto))
@@ -207,7 +207,7 @@ public final class ParserService: Sendable {
                     amount: amount,
                     direction: .borrowed,
                     isItem: false,
-                    settled: true,
+                    settled: false, // Must be false so DebtLedger includes it in calculations!
                     notes: "Partial payment"
                 )
                 return .success(.add(dto))
