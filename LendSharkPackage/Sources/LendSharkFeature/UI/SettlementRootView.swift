@@ -26,6 +26,7 @@ public struct SettlementRootView: View {
             
             TextField("Name", text: $selectedName)
                 .font(.system(size: 18, weight: .regular, design: .monospaced))
+                .foregroundColor(.inkBlack)
                 .textFieldStyle(.plain)
                 .padding(.vertical, 8)
                 .overlay(Rectangle().frame(height: 1).foregroundColor(.inkBlack), alignment: .bottom)

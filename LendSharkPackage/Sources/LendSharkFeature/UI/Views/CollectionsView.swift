@@ -20,7 +20,12 @@ struct CollectionsView: View {
     @State private var reminderText: String = ""
     
     var overdueDebtors: [DebtLedger.DebtorInfo] {
-        debtors.filter { $0.isOverdue && $0.owesMe }
+        // Include people with overdue money OR overdue items they borrowed from me
+        debtors.filter { debtor in
+            let hasOverdueMoney = debtor.daysOverdue > 0 && debtor.owesMe
+            let hasOverdueItems = debtor.items.contains { $0.isOverdue && $0.theyHaveMine }
+            return hasOverdueMoney || hasOverdueItems
+        }
     }
     
     var body: some View {
@@ -152,28 +157,50 @@ struct CollectionsView: View {
     
     // MARK: - Debtor Row
     private func overdueDebtorRow(_ debtor: DebtLedger.DebtorInfo) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let overdueItems = debtor.items.filter { $0.isOverdue && $0.theyHaveMine }
+        let hasOverdueMoney = debtor.daysOverdue > 0 && debtor.totalOwed > 0
+        let maxDaysOverdue = max(debtor.daysOverdue, overdueItems.map { $0.daysOverdue }.max() ?? 0)
+
+        return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(debtor.name.uppercased())
                         .font(.system(size: 17, weight: .bold, design: .monospaced))
                         .foregroundColor(.bloodRed)
 
-                    HStack(spacing: 4) {
-                        Text(formatAmount(debtor.totalOwed))
-                            .font(.system(size: 20, weight: .black, design: .monospaced))
-                        Text("•")
-                            .foregroundColor(.bloodRed.opacity(0.5))
-                        Text("\(debtor.daysOverdue)d")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    // Show money if overdue
+                    if hasOverdueMoney {
+                        HStack(spacing: 4) {
+                            Text(formatAmount(debtor.totalOwed))
+                                .font(.system(size: 20, weight: .black, design: .monospaced))
+                            Text("•")
+                                .foregroundColor(.bloodRed.opacity(0.5))
+                            Text("\(debtor.daysOverdue)d")
+                                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        }
+                        .foregroundColor(.bloodRed)
                     }
-                    .foregroundColor(.bloodRed)
+
+                    // Show overdue items
+                    ForEach(overdueItems, id: \.name) { item in
+                        HStack(spacing: 4) {
+                            Text("🔧")
+                                .font(.system(size: 12))
+                            Text(item.name.uppercased())
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            Text("•")
+                                .foregroundColor(.bloodRed.opacity(0.5))
+                            Text("\(item.daysOverdue)d")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        }
+                        .foregroundColor(.bloodRed)
+                    }
                 }
 
                 Spacer()
 
                 // Escalation stamp with rotation
-                Text(escalationLevel(for: debtor.daysOverdue))
+                Text(escalationLevel(for: maxDaysOverdue))
                     .font(.system(size: 10, weight: .black, design: .monospaced))
                     .tracking(1)
                     .foregroundColor(.bloodRed.opacity(0.8))
@@ -206,7 +233,8 @@ struct CollectionsView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .bold))
-                        Text("PAID")
+                        // Show RETURNED if only items, PAID if money
+                        Text(hasOverdueMoney ? "PAID" : "RETURNED")
                     }
                     .font(.system(size: 12, weight: .black, design: .monospaced))
                     .foregroundColor(.paperYellow)

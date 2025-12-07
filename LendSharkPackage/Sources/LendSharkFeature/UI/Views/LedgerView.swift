@@ -156,36 +156,48 @@ struct LedgerView: View {
     
     /// Single debtor row - stark and direct with dotted leaders
     private func debtorRow(_ debtor: DebtLedger.DebtorInfo) -> some View {
-        HStack(alignment: .center, spacing: 0) {
-            // Left side - Name with chevron hint
-            HStack(spacing: 6) {
-                Text(debtor.name.uppercased())
-                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.inkBlack)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 4) {
+            // Main row - money owed
+            HStack(alignment: .center, spacing: 0) {
+                // Left side - Name with chevron hint
+                HStack(spacing: 6) {
+                    Text(debtor.name.uppercased())
+                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.inkBlack)
+                        .lineLimit(1)
 
-                // Subtle chevron indicating tappable
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.pencilGray.opacity(0.5))
+                    // Subtle chevron indicating tappable
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.pencilGray.opacity(0.5))
+                }
+
+                // Dotted leader line (classic ledger style)
+                GeometryReader { geo in
+                    let dotCount = Int(geo.size.width / 8)
+                    Text(String(repeating: "·", count: max(3, dotCount)))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.pencilGray.opacity(0.6))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(height: 16)
+                .padding(.horizontal, 4)
+
+                // Right side - Amount and stamp
+                VStack(alignment: .trailing, spacing: 3) {
+                    if debtor.totalOwed != 0 {
+                        amountText(for: debtor)
+                    }
+                    stampText(for: debtor)
+                }
             }
 
-            // Dotted leader line (classic ledger style)
-            GeometryReader { geo in
-                let dotCount = Int(geo.size.width / 8)
-                Text(String(repeating: "·", count: max(3, dotCount)))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.pencilGray.opacity(0.6))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            }
-            .frame(height: 16)
-            .padding(.horizontal, 4)
-
-            // Right side - Amount and stamp
-            VStack(alignment: .trailing, spacing: 3) {
-                amountText(for: debtor)
-                stampText(for: debtor)
+            // Borrowed items section
+            if debtor.hasItems {
+                ForEach(debtor.items, id: \.name) { item in
+                    itemRow(item)
+                }
             }
         }
         .padding(.vertical, 10)
@@ -202,6 +214,45 @@ struct LedgerView: View {
                 .foregroundColor(.inkBlack.opacity(0.15)),
             alignment: .bottom
         )
+    }
+
+    /// Row for a borrowed item
+    private func itemRow(_ item: DebtLedger.BorrowedItem) -> some View {
+        HStack(spacing: 6) {
+            Text("🔧")
+                .font(.system(size: 12))
+
+            Text(item.name.uppercased())
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(.inkBlack.opacity(0.8))
+                .lineLimit(1)
+
+            Spacer()
+
+            if item.isOverdue {
+                Text("\(item.daysOverdue)d OVERDUE")
+                    .font(.system(size: 9, weight: .black, design: .monospaced))
+                    .foregroundColor(.bloodRed)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color.bloodRed.opacity(0.1))
+                    .overlay(Rectangle().stroke(Color.bloodRed.opacity(0.5), lineWidth: 1))
+            } else {
+                Text("due \(item.dueDate.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.pencilGray)
+            }
+
+            // Show direction
+            Text(item.theyHaveMine ? "HAS MINE" : "I HAVE")
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(item.theyHaveMine ? .inkBlack : .cashGreen)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 1)
+                .background(item.theyHaveMine ? Color.inkBlack.opacity(0.08) : Color.cashGreen.opacity(0.1))
+        }
+        .padding(.leading, 20)
+        .padding(.vertical, 2)
     }
     
     /// Amount display with proper coloring
@@ -271,6 +322,12 @@ struct LedgerView: View {
             text = "I OWE"
             color = .cashGreen
             rotation = 1.5
+        } else if debtor.totalOwed == 0 && debtor.hasItems {
+            // Only has borrowed items, no money
+            let hasMyStuff = debtor.items.contains { $0.theyHaveMine }
+            text = hasMyStuff ? "HAS ITEMS" : "LENDING"
+            color = .inkBlack
+            rotation = -1.0
         } else {
             text = "OWES"
             color = .inkBlack

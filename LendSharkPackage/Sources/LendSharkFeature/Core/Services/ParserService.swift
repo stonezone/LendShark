@@ -74,8 +74,18 @@ public final class ParserService: Sendable {
         if let paidResult = parsePaid(words, originalText: text, abbreviations: abbreviations) {
             return paidResult
         }
-        
-        return .failure(.invalidFormat("Didn't catch that. Try 'john owes 50 due 2 weeks at 10%'."))
+
+        // Pattern: "[name] borrowed [my] [item]" or "i borrowed [name]'s [item]"
+        if let itemResult = parseItemBorrow(words, originalText: text) {
+            return itemResult
+        }
+
+        // Pattern: "[name] returned [item]"
+        if let returnResult = parseItemReturn(words, originalText: text) {
+            return returnResult
+        }
+
+        return .failure(.invalidFormat("Didn't catch that. Try 'john owes 50' or 'johnny borrowed my drill'."))
     }
     
     // MARK: - Parse Patterns
@@ -218,7 +228,147 @@ public final class ParserService: Sendable {
 
         return nil
     }
-    
+
+    // MARK: - Item Borrowing Patterns
+
+    /// Parse item borrowing: "johnny borrowed my drill", "johnny borrowed my wrench for 3 days"
+    /// Also: "i borrowed frank's hammer"
+    private func parseItemBorrow(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
+        guard let borrowedIdx = words.firstIndex(of: "borrowed") else { return nil }
+
+        let lower = originalText.lowercased()
+
+        // Pattern: "i borrowed [name]'s [item]" - I have their stuff
+        if borrowedIdx > 0 && words[0] == "i" {
+            // Find possessive: "frank's" or just name before item
+            if let possessiveRange = lower.range(of: #"(\w+)'s\s+(.+)"#, options: .regularExpression) {
+                let match = String(lower[possessiveRange])
+                let parts = match.components(separatedBy: "'s ")
+                if parts.count >= 2 {
+                    let name = parts[0].capitalized
+                    var itemName = parts[1]
+                    // Strip duration phrase from item name
+                    itemName = stripDurationPhrase(from: itemName)
+                    let dueDate = extractItemDueDate(from: originalText)
+
+                    let dto = TransactionDTO(
+                        party: name,
+                        amount: 0,
+                        direction: .borrowed, // I borrowed FROM them
+                        isItem: true,
+                        dueDate: dueDate,
+                        notes: itemName.trimmingCharacters(in: .whitespaces)
+                    )
+                    return .success(.add(dto))
+                }
+            }
+            return nil
+        }
+
+        // Pattern: "[name] borrowed my [item]" - they have my stuff
+        if borrowedIdx > 0 {
+            let name = words[borrowedIdx - 1].capitalized
+
+            // Check for "my" after borrowed
+            let afterBorrowed = words.dropFirst(borrowedIdx + 1)
+            var itemWords: [String] = []
+
+            if afterBorrowed.first == "my" {
+                // "borrowed my wrench" - skip "my"
+                itemWords = Array(afterBorrowed.dropFirst())
+            } else {
+                // "borrowed the wrench" or just "borrowed wrench"
+                itemWords = Array(afterBorrowed)
+                // Skip articles
+                if itemWords.first == "the" || itemWords.first == "a" {
+                    itemWords = Array(itemWords.dropFirst())
+                }
+            }
+
+            guard !itemWords.isEmpty else { return nil }
+
+            // Build item name, stopping at duration keywords
+            var itemName = ""
+            for word in itemWords {
+                if ["for", "until", "due"].contains(word) { break }
+                itemName += (itemName.isEmpty ? "" : " ") + word
+            }
+
+            guard !itemName.isEmpty else { return nil }
+
+            let dueDate = extractItemDueDate(from: originalText)
+
+            let dto = TransactionDTO(
+                party: name,
+                amount: 0,
+                direction: .lent, // They borrowed FROM me
+                isItem: true,
+                dueDate: dueDate,
+                notes: itemName.trimmingCharacters(in: .whitespaces)
+            )
+            return .success(.add(dto))
+        }
+
+        return nil
+    }
+
+    /// Parse item return: "johnny returned the drill", "johnny returned my wrench"
+    private func parseItemReturn(_ words: [String], originalText: String) -> Result<ParsedAction, ParsingError>? {
+        guard let returnedIdx = words.firstIndex(of: "returned") else { return nil }
+        guard returnedIdx > 0 else { return nil }
+
+        let name = words[returnedIdx - 1].capitalized
+        return .success(.settle(name))
+    }
+
+    /// Extract due date for items: "for 3 days", "for a week", "for a few days"
+    private func extractItemDueDate(from text: String) -> Date {
+        let lower = text.lowercased()
+        let defaultDays = 7
+
+        // Pattern: "for X days/weeks"
+        if let range = lower.range(of: #"for\s+(\d+)\s*(day|week)s?"#, options: .regularExpression) {
+            let match = String(lower[range])
+            if let numRange = match.range(of: #"\d+"#, options: .regularExpression) {
+                let numStr = String(match[numRange])
+                if let num = Int(numStr) {
+                    let days = match.contains("week") ? num * 7 : num
+                    return Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
+                }
+            }
+        }
+
+        // Pattern: "for a week" / "for a few days" / "for a couple days"
+        if lower.contains("for a week") {
+            return Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+        }
+        if lower.contains("for a few days") || lower.contains("few days") {
+            return Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
+        }
+        if lower.contains("for a couple") || lower.contains("couple days") {
+            return Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
+        }
+
+        // Default: 7 days
+        return Calendar.current.date(byAdding: .day, value: defaultDays, to: Date()) ?? Date()
+    }
+
+    /// Strip duration phrase from item name
+    private func stripDurationPhrase(from text: String) -> String {
+        var result = text
+        let patterns = [
+            #"\s+for\s+\d+\s*(day|week)s?"#,
+            #"\s+for\s+a\s+(week|few days|couple days?)"#,
+            #"\s+until\s+.+"#
+        ]
+        for pattern in patterns {
+            if let range = result.range(of: pattern, options: .regularExpression) {
+                result.removeSubrange(range)
+            }
+        }
+        return result
+    }
+
     // MARK: - Amount Parsing
 
     /// Abbreviations for amount parsing (e.g., "note" = $100)

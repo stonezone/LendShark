@@ -53,11 +53,15 @@ struct DueTodayView: View {
                     .padding(.bottom, 12)
                 
                 if viewMode == .shortTerm {
-                    if dueToday.isEmpty && dueTomorrow.isEmpty {
+                    if dueToday.isEmpty && dueTomorrow.isEmpty && overdueTransactions.isEmpty {
                         emptyState
                     } else {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 20) {
+                                // OVERDUE section first (most urgent)
+                                if !overdueTransactions.isEmpty {
+                                    overdueSection
+                                }
                                 if !dueToday.isEmpty {
                                     dueTodaySection
                                 }
@@ -254,7 +258,7 @@ struct DueTodayView: View {
     }
     
     // MARK: - Due Today Section
-    
+
     private var dueTodaySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Stamp-style header
@@ -268,15 +272,15 @@ struct DueTodayView: View {
                 .overlay(Rectangle().stroke(Color.bloodRed, lineWidth: 1.5))
                 .rotationEffect(.degrees(-1.5))
                 .padding(.bottom, 4)
-            
+
             ForEach(groupedByPerson(dueToday), id: \.name) { debtor in
-                collectionRow(debtor: debtor, urgent: true)
+                collectionRow(debtor: debtor, urgent: true, isOverdue: false)
             }
         }
     }
     
     // MARK: - Due Tomorrow Section
-    
+
     private var dueTomorrowSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Stamp-style header
@@ -290,9 +294,39 @@ struct DueTodayView: View {
                 .overlay(Rectangle().stroke(Color.inkBlack, lineWidth: 1.5))
                 .rotationEffect(.degrees(1.0))
                 .padding(.bottom, 4)
-            
+
             ForEach(groupedByPerson(dueTomorrow), id: \.name) { debtor in
-                collectionRow(debtor: debtor, urgent: false)
+                collectionRow(debtor: debtor, urgent: false, isOverdue: false)
+            }
+        }
+    }
+
+    // MARK: - Overdue Section
+
+    private var overdueSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Urgent overdue stamp - RED and intimidating
+            HStack(spacing: 8) {
+                Text("!")
+                    .font(.system(size: 16, weight: .black, design: .monospaced))
+                    .foregroundColor(.paperYellow)
+                    .frame(width: 24, height: 24)
+                    .background(Color.bloodRed)
+
+                Text("OVERDUE")
+                    .font(.system(size: 14, weight: .black, design: .monospaced))
+                    .tracking(3)
+                    .foregroundColor(.bloodRed)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color.bloodRed.opacity(0.15))
+            .overlay(Rectangle().stroke(Color.bloodRed, lineWidth: 2))
+            .rotationEffect(.degrees(-1.5))
+            .padding(.bottom, 4)
+
+            ForEach(groupedByPersonWithOverdue(overdueTransactions), id: \.name) { debtor in
+                collectionRow(debtor: debtor, urgent: true, isOverdue: true)
             }
         }
     }
@@ -338,7 +372,7 @@ struct DueTodayView: View {
                     
                     ForEach(group.debtors) { debtor in
                         let urgent = calendar.isDateInToday(group.date) || calendar.isDateInTomorrow(group.date)
-                        collectionRow(debtor: debtor, urgent: urgent)
+                        collectionRow(debtor: debtor, urgent: urgent, isOverdue: false)
                     }
                 }
             }
@@ -346,54 +380,127 @@ struct DueTodayView: View {
     }
     
     // MARK: - Collection Row
-    
-    private func collectionRow(debtor: DebtorDue, urgent: Bool) -> some View {
-        HStack(alignment: .center, spacing: 0) {
-            // Name
-            Text(debtor.name.uppercased())
-                .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                .foregroundColor(.inkBlack)
-                .lineLimit(1)
-            
-            // Dotted leader
-            GeometryReader { geo in
-                let dotCount = Int(geo.size.width / 8)
-                Text(String(repeating: "·", count: max(3, dotCount)))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.pencilGray.opacity(0.6))
+
+    private func collectionRow(debtor: DebtorDue, urgent: Bool, isOverdue: Bool = false) -> some View {
+        let firstName = extractFirstName(debtor.name)
+
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 0) {
+                // Name (first name only)
+                Text(firstName.uppercased())
+                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                    .foregroundColor(isOverdue ? .bloodRed : .inkBlack)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity)
+
+                // Days overdue badge (if overdue)
+                if isOverdue && debtor.daysOverdue > 0 {
+                    Text("\(debtor.daysOverdue)d")
+                        .font(.system(size: 10, weight: .black, design: .monospaced))
+                        .foregroundColor(.paperYellow)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.bloodRed)
+                        .padding(.leading, 4)
+                }
+
+                // Dotted leader
+                GeometryReader { geo in
+                    let dotCount = Int(geo.size.width / 8)
+                    Text(String(repeating: "·", count: max(3, dotCount)))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.pencilGray.opacity(0.6))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(height: 16)
+                .padding(.horizontal, 4)
+
+                // Amount or item indicator
+                VStack(alignment: .trailing, spacing: 0) {
+                    if debtor.totalAmount > 0 {
+                        Text(formatCurrency(debtor.totalAmount))
+                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .foregroundColor(isOverdue ? .bloodRed : (urgent ? .bloodRed : .inkBlack))
+
+                        // Show interest if any
+                        if debtor.accruedInterest > 0 {
+                            Text("+\(formatCurrency(debtor.accruedInterest)) int")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.bloodRed)
+                        }
+                    } else if !debtor.items.isEmpty {
+                        // Only items, no money - show first item
+                        Text("🔧 \(debtor.items.first?.name.uppercased() ?? "ITEM")")
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundColor(isOverdue ? .bloodRed : (urgent ? .bloodRed : .inkBlack))
+                    }
+                }
+
+                #if os(iOS)
+                // Phone action buttons (if phone exists)
+                if let phone = debtor.phoneNumber, !phone.isEmpty {
+                    PhoneActionButtonsCompact(
+                        phoneNumber: phone,
+                        personName: debtor.name,
+                        amount: debtor.totalAmount,
+                        dueDate: debtor.dueDate
+                    )
+                    .padding(.leading, 8)
+                }
+                #endif
             }
-            .frame(height: 16)
-            .padding(.horizontal, 4)
-            
-            // Amount
-            Text(formatCurrency(debtor.totalAmount))
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
-                .foregroundColor(urgent ? .bloodRed : .inkBlack)
-            
-            #if os(iOS)
-            // Phone action buttons (if phone exists)
-            if let phone = debtor.phoneNumber, !phone.isEmpty {
-                PhoneActionButtonsCompact(
-                    phoneNumber: phone,
-                    personName: debtor.name,
-                    amount: debtor.totalAmount,
-                    dueDate: debtor.dueDate
-                )
-                .padding(.leading, 8)
+
+            // Show items below the main row (if any, and if there's also money or multiple items)
+            if debtor.totalAmount > 0 && !debtor.items.isEmpty {
+                ForEach(debtor.items) { item in
+                    HStack(spacing: 6) {
+                        Text("🔧")
+                            .font(.system(size: 11))
+                        Text(item.name.uppercased())
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(isOverdue ? .bloodRed.opacity(0.8) : .inkBlack.opacity(0.8))
+                        if item.daysOverdue > 0 {
+                            Text("(\(item.daysOverdue)d)")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundColor(.bloodRed)
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
+            } else if debtor.items.count > 1 {
+                // Multiple items only (no money) - show the rest
+                ForEach(debtor.items.dropFirst()) { item in
+                    HStack(spacing: 6) {
+                        Text("🔧")
+                            .font(.system(size: 11))
+                        Text(item.name.uppercased())
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(isOverdue ? .bloodRed.opacity(0.8) : .inkBlack.opacity(0.8))
+                        if item.daysOverdue > 0 {
+                            Text("(\(item.daysOverdue)d)")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundColor(.bloodRed)
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
             }
-            #endif
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 8)
-        .background(urgent ? Color.bloodRed.opacity(0.06) : Color.clear)
+        .background(isOverdue ? Color.bloodRed.opacity(0.12) : (urgent ? Color.bloodRed.opacity(0.06) : Color.clear))
         .overlay(
             Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(.inkBlack.opacity(0.15)),
+                .frame(height: isOverdue ? 1.5 : 0.5)
+                .foregroundColor(isOverdue ? .bloodRed.opacity(0.3) : .inkBlack.opacity(0.15)),
             alignment: .bottom
         )
+    }
+
+    /// Extract first name from full name
+    private func extractFirstName(_ fullName: String) -> String {
+        let components = fullName.trimmingCharacters(in: .whitespaces).components(separatedBy: " ")
+        return components.first ?? fullName
     }
     
     // MARK: - Computed Properties
@@ -421,10 +528,21 @@ struct DueTodayView: View {
         }
     }
     
+    private var overdueTransactions: [Transaction] {
+        let today = calendar.startOfDay(for: Date())
+
+        return transactionsWithDueDates.filter { tx in
+            guard let due = tx.dueDate else { return false }
+            let dueStart = calendar.startOfDay(for: due)
+            return dueStart < today  // Due date is in the past
+        }
+    }
+
     private var totalOnDeck: Decimal {
+        let overdueAmounts = overdueTransactions.compactMap { $0.amount?.decimalValue }.reduce(0, +)
         let todayAmounts = dueToday.compactMap { $0.amount?.decimalValue }.reduce(0, +)
         let tomorrowAmounts = dueTomorrow.compactMap { $0.amount?.decimalValue }.reduce(0, +)
-        return todayAmounts + tomorrowAmounts
+        return overdueAmounts + todayAmounts + tomorrowAmounts
     }
     
     private var next30DaysTransactions: [Transaction] {
@@ -469,6 +587,16 @@ struct DueTodayView: View {
         let totalAmount: Decimal
         let phoneNumber: String?
         let dueDate: Date?
+        let items: [ItemDue]  // Borrowed items due
+        let daysOverdue: Int  // Days past due date (0 if not overdue)
+        let accruedInterest: Decimal  // Interest accrued on overdue amounts
+    }
+
+    private struct ItemDue: Identifiable {
+        let id = UUID()
+        let name: String
+        let dueDate: Date?
+        let daysOverdue: Int
     }
     
     private func modeToggleSegment(
@@ -488,21 +616,104 @@ struct DueTodayView: View {
     }
     
     private func groupedByPerson(_ transactions: [Transaction]) -> [DebtorDue] {
-        var grouped: [String: (amount: Decimal, phone: String?, dueDate: Date?)] = [:]
-        
+        var grouped: [String: (amount: Decimal, phone: String?, dueDate: Date?, items: [ItemDue], interest: Decimal)] = [:]
+
         for tx in transactions {
             let name = tx.party ?? "Unknown"
-            let amount = tx.amount?.decimalValue ?? 0
-            let existing = grouped[name] ?? (amount: 0, phone: nil, dueDate: nil)
-            grouped[name] = (
-                amount: existing.amount + amount,
-                phone: tx.phoneNumber ?? existing.phone,
-                dueDate: tx.dueDate ?? existing.dueDate
+            var existing = grouped[name] ?? (amount: 0, phone: nil, dueDate: nil, items: [], interest: 0)
+
+            if tx.isItem {
+                // It's a borrowed item - add to items list
+                let itemName = tx.notes ?? "Item"
+                existing.items.append(ItemDue(name: itemName, dueDate: tx.dueDate, daysOverdue: 0))
+            } else {
+                // It's money
+                let amount = tx.amount?.decimalValue ?? 0
+                existing.amount += amount
+                // Add interest using the existing InterestCalculator
+                let interest = InterestCalculator.interestSoFar(for: tx)
+                existing.interest += interest
+            }
+
+            existing.phone = tx.phoneNumber ?? existing.phone
+            existing.dueDate = tx.dueDate ?? existing.dueDate
+            grouped[name] = existing
+        }
+
+        return grouped.map {
+            DebtorDue(
+                name: $0.key,
+                totalAmount: $0.value.amount,
+                phoneNumber: $0.value.phone,
+                dueDate: $0.value.dueDate,
+                items: $0.value.items,
+                daysOverdue: 0,
+                accruedInterest: $0.value.interest
             )
         }
-        
-        return grouped.map { DebtorDue(name: $0.key, totalAmount: $0.value.amount, phoneNumber: $0.value.phone, dueDate: $0.value.dueDate) }
-            .sorted { $0.totalAmount > $1.totalAmount }
+        .sorted { lhs, rhs in
+            // Sort by: money amount first, then by item count
+            if lhs.totalAmount != rhs.totalAmount {
+                return lhs.totalAmount > rhs.totalAmount
+            }
+            return lhs.items.count > rhs.items.count
+        }
+    }
+
+    /// Groups overdue transactions by person, calculating days overdue and interest
+    private func groupedByPersonWithOverdue(_ transactions: [Transaction]) -> [DebtorDue] {
+        let today = calendar.startOfDay(for: Date())
+        var grouped: [String: (amount: Decimal, phone: String?, dueDate: Date?, items: [ItemDue], maxDaysOverdue: Int, interest: Decimal)] = [:]
+
+        for tx in transactions {
+            let name = tx.party ?? "Unknown"
+            var existing = grouped[name] ?? (amount: 0, phone: nil, dueDate: nil, items: [], maxDaysOverdue: 0, interest: 0)
+
+            let daysOverdue: Int
+            if let due = tx.dueDate {
+                let dueStart = calendar.startOfDay(for: due)
+                daysOverdue = max(0, calendar.dateComponents([.day], from: dueStart, to: today).day ?? 0)
+            } else {
+                daysOverdue = 0
+            }
+
+            if tx.isItem {
+                // It's a borrowed item - add to items list with days overdue
+                let itemName = tx.notes ?? "Item"
+                existing.items.append(ItemDue(name: itemName, dueDate: tx.dueDate, daysOverdue: daysOverdue))
+            } else {
+                // It's money
+                let amount = tx.amount?.decimalValue ?? 0
+                existing.amount += amount
+                // Calculate interest using the existing InterestCalculator
+                let interest = InterestCalculator.interestSoFar(for: tx)
+                existing.interest += interest
+            }
+
+            existing.maxDaysOverdue = max(existing.maxDaysOverdue, daysOverdue)
+            existing.phone = tx.phoneNumber ?? existing.phone
+            existing.dueDate = tx.dueDate ?? existing.dueDate
+            grouped[name] = existing
+        }
+
+        return grouped.map {
+            DebtorDue(
+                name: $0.key,
+                totalAmount: $0.value.amount,
+                phoneNumber: $0.value.phone,
+                dueDate: $0.value.dueDate,
+                items: $0.value.items,
+                daysOverdue: $0.value.maxDaysOverdue,
+                accruedInterest: $0.value.interest
+            )
+        }
+        .sorted { lhs, rhs in
+            // Sort by days overdue (most urgent first), then by amount
+            if lhs.daysOverdue != rhs.daysOverdue {
+                return lhs.daysOverdue > rhs.daysOverdue
+            }
+            return lhs.totalAmount > rhs.totalAmount
+        }
     }
     
     private func formatCurrency(_ amount: Decimal) -> String {

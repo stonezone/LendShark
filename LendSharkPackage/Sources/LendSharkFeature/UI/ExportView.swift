@@ -58,24 +58,80 @@ public struct ExportView: View {
     
     private var summaryText: String {
         if !lastSummary.isEmpty { return lastSummary }
-        
+
         var lines: [String] = []
         lines.append("Date: \(Date.now.formatted(date: .abbreviated, time: .omitted))")
         lines.append("-----------------")
-        
+
         let debtors = DebtLedger.getDebtors(from: Array(transactions))
-        var total: Decimal = 0
-        
-        for debtor in debtors where debtor.totalOwed > 0 {
-            let amount = NSDecimalNumber(decimal: debtor.totalOwed).doubleValue
-            lines.append("\(debtor.name): $\(String(format: "%.2f", amount))")
-            total += debtor.totalOwed
+
+        // Section: They owe me (money)
+        let theyOweMe = debtors.filter { $0.owesMe && $0.totalOwed > 0 }
+        if !theyOweMe.isEmpty {
+            lines.append("")
+            lines.append("THEY OWE ME:")
+            var total: Decimal = 0
+            for debtor in theyOweMe {
+                let amount = NSDecimalNumber(decimal: debtor.totalOwed).doubleValue
+                lines.append("  \(debtor.name): $\(String(format: "%.2f", amount))")
+                total += debtor.totalOwed
+            }
+            let totalAmount = NSDecimalNumber(decimal: total).doubleValue
+            lines.append("  SUBTOTAL: $\(String(format: "%.2f", totalAmount))")
         }
-        
+
+        // Section: I owe them (money)
+        let iOwe = debtors.filter { $0.iOwe && $0.totalOwed > 0 }
+        if !iOwe.isEmpty {
+            lines.append("")
+            lines.append("I OWE:")
+            var total: Decimal = 0
+            for debtor in iOwe {
+                let amount = NSDecimalNumber(decimal: debtor.totalOwed).doubleValue
+                lines.append("  \(debtor.name): $\(String(format: "%.2f", amount))")
+                total += debtor.totalOwed
+            }
+            let totalAmount = NSDecimalNumber(decimal: total).doubleValue
+            lines.append("  SUBTOTAL: $\(String(format: "%.2f", totalAmount))")
+        }
+
+        // Section: Items they have (borrowed from me)
+        let theyHaveMyItems = debtors.flatMap { debtor in
+            debtor.items.filter { $0.theyHaveMine }.map { (debtor.name, $0) }
+        }
+        if !theyHaveMyItems.isEmpty {
+            lines.append("")
+            lines.append("ITEMS THEY HAVE:")
+            for (name, item) in theyHaveMyItems {
+                let overdueText = item.isOverdue ? " [OVERDUE \(item.daysOverdue)d]" : ""
+                lines.append("  \(name): \(item.name)\(overdueText)")
+            }
+        }
+
+        // Section: Items I have (borrowed from them)
+        let iHaveTheirItems = debtors.flatMap { debtor in
+            debtor.items.filter { !$0.theyHaveMine }.map { (debtor.name, $0) }
+        }
+        if !iHaveTheirItems.isEmpty {
+            lines.append("")
+            lines.append("ITEMS I HAVE:")
+            for (name, item) in iHaveTheirItems {
+                let overdueText = item.isOverdue ? " [OVERDUE \(item.daysOverdue)d]" : ""
+                lines.append("  From \(name): \(item.name)\(overdueText)")
+            }
+        }
+
+        // Summary
+        lines.append("")
         lines.append("-----------------")
-        let totalAmount = NSDecimalNumber(decimal: total).doubleValue
-        lines.append("TOTAL DUE: $\(String(format: "%.2f", totalAmount))")
-        
+        let totalOwedToMe = theyOweMe.reduce(Decimal(0)) { $0 + $1.totalOwed }
+        let totalIOwe = iOwe.reduce(Decimal(0)) { $0 + $1.totalOwed }
+        let netAmount = totalOwedToMe - totalIOwe
+
+        lines.append("NET: \(netAmount >= 0 ? "+" : "")$\(String(format: "%.2f", NSDecimalNumber(decimal: netAmount).doubleValue))")
+        lines.append("Items out: \(theyHaveMyItems.count)")
+        lines.append("Items in: \(iHaveTheirItems.count)")
+
         return lines.joined(separator: "\n")
     }
     

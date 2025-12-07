@@ -242,11 +242,12 @@ struct SettlementView: View {
 #Preview {
     SettlementView(
         debtor: DebtLedger.DebtorInfo(
-            name: "John Smith", 
+            name: "John Smith",
             principal: 500,
             accruedInterest: 25,
             daysOverdue: 30,
-            notes: "has my watch"
+            notes: "has my watch",
+            items: []
         )
     ) {
         // onDismiss

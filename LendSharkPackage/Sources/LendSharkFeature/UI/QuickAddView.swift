@@ -125,9 +125,10 @@ public struct QuickAddView: View {
                     Group {
                         Text("• john owes 50")
                         Text("• mary owes 100 due 2 weeks")
-                        Text("• mike owes 200 at 10%")
                         Text("• john paid 25")
-                        Text("• i owe frank 50")
+                        Text("• johnny borrowed my drill")
+                        Text("• mike borrowed my wrench for 3 days")
+                        Text("• johnny returned the drill")
                     }
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.pencilGray.opacity(0.6))
@@ -164,8 +165,9 @@ public struct QuickAddView: View {
                 HStack(spacing: 8) {
                     ForEach(frequentBorrowers, id: \.name) { borrower in
                         Button(action: {
-                            inputText = borrower.name.lowercased()
+                            inputText = borrower.name.lowercased() + " "
                             detectedName = borrower.name.lowercased()
+                            isInputFocused = true  // Keep cursor active for continued typing
                         }) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(borrower.name.uppercased())
@@ -326,32 +328,50 @@ public struct QuickAddView: View {
             switch action {
             case .add(let dto):
                 let who = dto.party
+
+                // Handle ITEM borrowing differently from money
+                if dto.isItem {
+                    let itemName = dto.notes ?? "item"
+                    var base = dto.direction == .lent
+                        ? "🔧 \(who.uppercased()) borrowed \(itemName.uppercased())"
+                        : "🔧 I borrowed \(itemName.uppercased()) from \(who.uppercased())"
+
+                    // Add due date
+                    if let due = dto.dueDate {
+                        let days = Calendar.current.dateComponents([.day], from: Date(), to: due).day ?? 0
+                        base += " (return in \(days)d)"
+                    }
+
+                    return base
+                }
+
+                // Handle MONEY transactions
                 let amount = dto.amount ?? 0
                 let dollars = String(format: "%.2f", NSDecimalNumber(decimal: amount).doubleValue)
-                var base = dto.direction == .lent 
+                var base = dto.direction == .lent
                     ? "\(who.uppercased()) owes $\(dollars)"
                     : "I owe \(who.uppercased()) $\(dollars)"
-                
+
                 // Add interest if present
                 if let rate = dto.interestRate {
                     let pct = NSDecimalNumber(decimal: rate * 100).intValue
                     base += " @ \(pct)%/wk"
                 }
-                
+
                 // Add due date if present
                 if let due = dto.dueDate {
                     let days = Calendar.current.dateComponents([.day], from: Date(), to: due).day ?? 0
                     base += " (due in \(days)d)"
                 }
-                
+
                 // Add notes if present
                 if let notes = dto.notes, !notes.isEmpty {
                     base += " [\(notes)]"
                 }
-                
+
                 return base
             case .settle(let name):
-                return "Mark \(name.uppercased()) as PAID"
+                return "Mark \(name.uppercased()) as PAID/RETURNED"
             }
         case .failure:
             return ""
@@ -576,6 +596,7 @@ public struct QuickAddView: View {
     private func applySuggestion(_ suggestion: QuickAddSuggestion) {
         inputText = suggestion.completionText
         bumpSuggestionWeight(for: suggestion.contactName)
+        isInputFocused = true  // Keep cursor active for continued typing
         // Re-run detection and suggestions for the new value
         detectNameInInput(inputText)
     }

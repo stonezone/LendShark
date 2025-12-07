@@ -3,7 +3,28 @@ import CoreData
 
 /// Core people tracking - no entity needed, calculates from transactions
 struct DebtLedger {
-    
+
+    /// A borrowed physical item (not money)
+    struct BorrowedItem {
+        let name: String           // Item name (e.g., "impact wrench")
+        let dueDate: Date
+        let theyHaveMine: Bool     // true = they borrowed from me, false = I borrowed from them
+
+        var daysOverdue: Int {
+            let days = Calendar.current.dateComponents([.day], from: dueDate, to: Date()).day ?? 0
+            return max(0, days)
+        }
+
+        var isOverdue: Bool {
+            daysOverdue > 0
+        }
+
+        var daysUntilDue: Int {
+            let days = Calendar.current.dateComponents([.day], from: Date(), to: dueDate).day ?? 0
+            return max(0, days)
+        }
+    }
+
     /// What we track about each debtor
     struct DebtorInfo {
         let name: String
@@ -11,25 +32,34 @@ struct DebtLedger {
         let accruedInterest: Decimal // Interest accumulated
         let daysOverdue: Int
         let notes: String?          // Collateral or notes
-        
+        let items: [BorrowedItem]   // Physical items they have or I have
+
         var totalOwed: Decimal {
             principal + accruedInterest
         }
-        
+
         var isOverdue: Bool {
-            daysOverdue > 0
+            daysOverdue > 0 || items.contains { $0.isOverdue }
         }
-        
+
         var owesMe: Bool {
             totalOwed > 0
         }
-        
+
         var iOwe: Bool {
             totalOwed < 0
         }
-        
+
         var hasInterest: Bool {
             accruedInterest > 0
+        }
+
+        var hasItems: Bool {
+            !items.isEmpty
+        }
+
+        var overdueItems: [BorrowedItem] {
+            items.filter { $0.isOverdue }
         }
     }
     
@@ -41,8 +71,9 @@ struct DebtLedger {
             var dueDate: Date?
             var oldestDate: Date?
             var notes: String?
+            var items: [BorrowedItem] = []
         }
-        
+
         var debtorMap: [String: DebtData] = [:]
         let now = Date()
         
@@ -50,12 +81,30 @@ struct DebtLedger {
         for transaction in transactions {
             guard !transaction.settled else { continue }
             guard let party = transaction.party, !party.isEmpty else { continue }
-            
-            let amount = transaction.amount as? Decimal ?? 0
-            // Use DTO-level direction to avoid drift between enums
+
             let direction = TransactionDTO.TransactionDirection(rawValue: Int(transaction.direction)) ?? .lent
+
+            // Handle borrowed ITEMS separately from money
+            if transaction.isItem {
+                let itemName = transaction.notes ?? "Item"
+                let dueDate = transaction.dueDate ?? Calendar.current.date(byAdding: .day, value: 7, to: transaction.timestamp ?? Date()) ?? Date()
+                let theyHaveMine = direction == .lent // .lent means they borrowed FROM me
+
+                let item = BorrowedItem(name: itemName, dueDate: dueDate, theyHaveMine: theyHaveMine)
+
+                if var existing = debtorMap[party] {
+                    existing.items.append(item)
+                    debtorMap[party] = existing
+                } else {
+                    debtorMap[party] = DebtData(items: [item])
+                }
+                continue
+            }
+
+            // Handle MONEY transactions
+            let amount = transaction.amount as? Decimal ?? 0
             let debtAmount = direction == .lent ? amount : -amount
-            
+
             // Calculate interest so far using centralised helper.
             // Only track vig for money that others owe me.
             let interestAmount: Decimal
@@ -64,11 +113,11 @@ struct DebtLedger {
             } else {
                 interestAmount = 0
             }
-            
+
             if var existing = debtorMap[party] {
                 existing.principal += debtAmount
                 existing.interest += interestAmount
-                
+
                 // Track oldest date and earliest due date
                 if let transDate = transaction.timestamp {
                     existing.oldestDate = existing.oldestDate.map { min($0, transDate) } ?? transDate
@@ -76,7 +125,7 @@ struct DebtLedger {
                 if let due = transaction.dueDate {
                     existing.dueDate = existing.dueDate.map { min($0, due) } ?? due
                 }
-                // Combine notes
+                // Combine notes (but not for items - those go in items array)
                 if let note = transaction.notes, !note.isEmpty {
                     existing.notes = existing.notes.map { $0 + "; " + note } ?? note
                 }
@@ -94,8 +143,9 @@ struct DebtLedger {
         
         // Convert to DebtorInfo
         let debtors = debtorMap.compactMap { (person, data) -> DebtorInfo? in
-            guard data.principal != 0 else { return nil }
-            
+            // Include if they owe money OR have borrowed items
+            guard data.principal != 0 || !data.items.isEmpty else { return nil }
+
             let daysOverdue: Int
             if data.principal > 0 {
                 if let dueDate = data.dueDate {
@@ -112,13 +162,14 @@ struct DebtLedger {
             } else {
                 daysOverdue = 0
             }
-            
+
             return DebtorInfo(
                 name: person,
                 principal: data.principal,
                 accruedInterest: data.interest,
                 daysOverdue: daysOverdue,
-                notes: data.notes
+                notes: data.notes,
+                items: data.items
             )
         }
         
