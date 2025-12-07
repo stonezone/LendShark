@@ -1,0 +1,15 @@
+{
+  "project_name": "lendshark",
+  "claude_os_url": "http://localhost:8051",
+  "docs_paths": ["./CLAUDE.md"],
+  "tech_stack": "SwiftUI/iOS",
+  "database": "Core Data",
+  "dev_environment": "Xcode/Local",
+  "created_at": "2025-12-01T21:43:00Z",
+  "knowledge_bases": {
+    "memories": "lendshark-project-memories",
+    "profile": "lendshark-project-profile",
+    "index": "lendshark-project-index",
+    "docs": "lendshark-knowledge-docs"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "hooks": [
+    {
+      "name": "session-start",
+      "trigger": "on_session_start",
+      "action": "load_context",
+      "config": {
+        "load_memories": true,
+        "load_profile": true
+      }
+    },
+    {
+      "name": "session-end",
+      "trigger": "on_session_end",
+      "action": "save_context",
+      "config": {
+        "save_memories": true,
+        "summarize_session": true
+      }
+    }
+  ]
+}

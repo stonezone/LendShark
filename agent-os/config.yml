@@ -1,0 +1,29 @@
+# Agent-OS Configuration
+# Created: 2025-12-01T21:44:00Z
+
+project:
+  name: lendshark
+  type: ios-app
+  tech_stack: SwiftUI/iOS
+  database: Core Data
+
+agents:
+  enabled: true
+  path: .claude/agents/agent-os
+
+specs:
+  directory: agent-os/specs
+  template: default
+
+standards:
+  backend: agent-os/standards/backend
+  frontend: agent-os/standards/frontend
+  global: agent-os/standards/global
+  testing: agent-os/standards/testing
+
+product:
+  directory: agent-os/product
+
+workflows:
+  spec_driven: true
+  require_approval: true

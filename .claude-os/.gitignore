@@ -1,0 +1,5 @@
+# Claude OS state files (don't commit these)
+claude-os-state.json
+.index_state
+.commit_count
+*.log

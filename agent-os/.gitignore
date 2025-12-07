@@ -1,0 +1,4 @@
+# Agent-OS generated files
+*.draft
+*.wip
+.agent-state/

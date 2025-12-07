@@ -46,7 +46,7 @@ public final class ExportService: Sendable {
             let date = dateFormatter.string(from: transaction.timestamp)
             let type = transaction.direction == .lent ? "Lent" : "Borrowed"
             let party = escapeCSV(transaction.party)
-            let amount = transaction.isItem ? "" : String(format: "%.2f", NSDecimalNumber(decimal: transaction.amount ?? 0).doubleValue)
+            let amount = transaction.isItem ? "" : formatDecimal(transaction.amount ?? 0)
             let item = escapeCSV(transaction.item ?? "")
             let settled = transaction.settled ? "Settled" : "Open"
             let notes = escapeCSV(transaction.notes ?? "")
@@ -80,9 +80,9 @@ public final class ExportService: Sendable {
         )
         
         // Create PDF from HTML using UIGraphicsPDFRenderer
-        try await generatePDFFromHTML(htmlContent: htmlContent, outputURL: tempURL)
-        
-        return tempURL
+        let finalURL = try await generatePDFFromHTML(htmlContent: htmlContent, outputURL: tempURL)
+
+        return finalURL
     }
     
     private func generatePDFHTMLContent(
@@ -307,7 +307,7 @@ public final class ExportService: Sendable {
     }
     
     @MainActor
-    private func generatePDFFromHTML(htmlContent: String, outputURL: URL) async throws {
+    private func generatePDFFromHTML(htmlContent: String, outputURL: URL) async throws -> URL {
         #if canImport(UIKit)
         // Create PDF using UIGraphicsPDFRenderer with better pagination
         let pageSize = CGSize(width: 612, height: 792) // Standard 8.5x11 inch page
@@ -420,16 +420,12 @@ public final class ExportService: Sendable {
         } catch {
             throw NSError(domain: "ExportService", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to write PDF to file: \(error.localizedDescription)"])
         }
+        return outputURL
         #else
-        // Fallback for platforms without UIKit - save as HTML
+        // Fallback for platforms without UIKit - save as HTML (honest about format)
         let htmlURL = outputURL.deletingPathExtension().appendingPathExtension("html")
         try htmlContent.write(to: htmlURL, atomically: true, encoding: .utf8)
-        
-        // Copy to original URL for compatibility
-        if FileManager.default.fileExists(atPath: outputURL.path) {
-            try FileManager.default.removeItem(at: outputURL)
-        }
-        try FileManager.default.copyItem(at: htmlURL, to: outputURL)
+        return htmlURL
         #endif
     }
     
