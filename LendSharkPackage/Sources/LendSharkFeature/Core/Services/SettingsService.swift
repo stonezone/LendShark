@@ -38,6 +38,11 @@ public final class SettingsService: ObservableObject {
     /// Public initializer - no longer singleton
     public init() {}
 
+    nonisolated private static var isRunningUnderXCTest: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil
+    }
+
     // MARK: - Abbreviations Access
     public var abbreviations: [String: Decimal] {
         get {
@@ -184,6 +189,11 @@ public final class SettingsService: ObservableObject {
         // This app targets iOS; keep notification scheduling iOS-only.
         return
         #else
+        // Package tests (SwiftPM in Xcode) can run without a host app, and UNUserNotificationCenter
+        // can raise NSInternalInconsistencyException (bundleProxyForCurrentProcess is nil).
+        // Keep notification side effects out of unit tests.
+        guard !Self.isRunningUnderXCTest else { return }
+
         Task {
             await requestNotificationPermission()
             
@@ -213,6 +223,7 @@ public final class SettingsService: ObservableObject {
     
     public func cancelAllNotifications() {
         #if os(iOS)
+        guard !Self.isRunningUnderXCTest else { return }
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         #endif
