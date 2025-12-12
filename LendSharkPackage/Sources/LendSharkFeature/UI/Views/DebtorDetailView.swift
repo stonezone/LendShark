@@ -55,8 +55,9 @@ struct DebtorDetailView: View {
             }
         }
         .navigationTitle(personName.uppercased())
-        .navigationBarTitleDisplayMode(.inline)
+        .lendSharkNavigationBarTitleDisplayModeInline()
         .toolbar {
+            #if os(iOS)
             ToolbarItem(placement: .navigationBarTrailing) {
                 if totalOwed > 0 {
                     Button("PARTIAL PAY") {
@@ -66,6 +67,17 @@ struct DebtorDetailView: View {
                     .foregroundColor(.cashGreen)
                 }
             }
+            #else
+            ToolbarItem(placement: .primaryAction) {
+                if totalOwed > 0 {
+                    Button("PARTIAL PAY") {
+                        showingPartialPayment = true
+                    }
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundColor(.cashGreen)
+                }
+            }
+            #endif
         }
         .sheet(isPresented: $showingEditSheet) {
             if let transaction = editingTransaction {
@@ -77,7 +89,7 @@ struct DebtorDetailView: View {
         }
         .alert("PARTIAL PAYMENT", isPresented: $showingPartialPayment) {
             TextField("Amount", text: $partialAmount)
-                .keyboardType(.decimalPad)
+                .lendSharkKeyboardTypeDecimalPad()
             Button("RECORD") {
                 recordPartialPayment()
             }

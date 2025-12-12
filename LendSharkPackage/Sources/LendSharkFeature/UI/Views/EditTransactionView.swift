@@ -70,7 +70,7 @@ struct EditTransactionView: View {
                             TextField("Name", text: $party)
                                 .font(.system(size: 17, weight: .semibold, design: .monospaced))
                                 .foregroundColor(.inkBlack)
-                                .autocapitalization(.words)
+                                .lendSharkAutocapitalizationWords()
                                 .focused($focusedField, equals: .party)
                                 .onSubmit {
                                     focusedField = .amount
@@ -86,7 +86,7 @@ struct EditTransactionView: View {
                                 TextField("0.00", text: $amount)
                                     .font(.system(size: 24, weight: .black, design: .monospaced))
                                     .foregroundColor(.inkBlack)
-                                    .keyboardType(.decimalPad)
+                                    .lendSharkKeyboardTypeDecimalPad()
                                     .focused($focusedField, equals: .amount)
                             }
                         }
@@ -105,7 +105,7 @@ struct EditTransactionView: View {
                                 TextField("0", text: $interestRate)
                                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                                     .foregroundColor(.bloodRed)
-                                    .keyboardType(.numberPad)
+                                    .lendSharkKeyboardTypeNumberPad()
                                     .frame(width: 60)
                                     .focused($focusedField, equals: .interestRate)
                                 Text("%")
@@ -151,8 +151,9 @@ struct EditTransactionView: View {
                 }
                 .scrollDismissesKeyboard(.immediately)
             }
-            .navigationBarTitleDisplayMode(.inline)
+            .lendSharkNavigationBarTitleDisplayModeInline()
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("CANCEL") {
                         onDismiss()
@@ -175,6 +176,30 @@ struct EditTransactionView: View {
                     }
                     .disabled(!isValid)
                 }
+                #else
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("CANCEL") {
+                        onDismiss()
+                    }
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(.pencilGray)
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        saveChanges()
+                    } label: {
+                        Text("SAVE")
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .tracking(1)
+                            .foregroundColor(.paperYellow)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(isValid ? Color.inkBlack : Color.pencilGray)
+                    }
+                    .disabled(!isValid)
+                }
+                #endif
             }
         }
     }

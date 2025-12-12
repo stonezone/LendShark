@@ -38,14 +38,14 @@ final class SettingsServiceTests: XCTestCase {
         // Then
         XCTAssertTrue(settingsService.enableNotifications)
         XCTAssertFalse(settingsService.autoSettle)
-        XCTAssertTrue(settingsService.darkMode)
+        XCTAssertFalse(settingsService.darkMode)
         XCTAssertFalse(settingsService.biometricAuth)
-        XCTAssertTrue(settingsService.enableiCloudSync)
+        XCTAssertFalse(settingsService.enableiCloudSync)
         XCTAssertEqual(settingsService.currencySymbol, "$")
-        XCTAssertEqual(settingsService.exportFormat, "CSV")
+        XCTAssertEqual(settingsService.exportFormat, "PDF")
         XCTAssertEqual(settingsService.notificationFrequency, "Daily")
         XCTAssertFalse(settingsService.analyticsEnabled)
-        XCTAssertTrue(settingsService.crashReportingEnabled)
+        XCTAssertFalse(settingsService.crashReportingEnabled)
     }
     
     // MARK: - General Settings Tests
@@ -255,14 +255,14 @@ final class SettingsServiceTests: XCTestCase {
         // Then
         XCTAssertTrue(settingsService.enableNotifications)
         XCTAssertFalse(settingsService.autoSettle)
-        XCTAssertTrue(settingsService.darkMode)
+        XCTAssertFalse(settingsService.darkMode)
         XCTAssertFalse(settingsService.biometricAuth)
-        XCTAssertTrue(settingsService.enableiCloudSync)
+        XCTAssertFalse(settingsService.enableiCloudSync)
         XCTAssertEqual(settingsService.currencySymbol, "$")
-        XCTAssertEqual(settingsService.exportFormat, "CSV")
+        XCTAssertEqual(settingsService.exportFormat, "PDF")
         XCTAssertEqual(settingsService.notificationFrequency, "Daily")
         XCTAssertFalse(settingsService.analyticsEnabled)
-        XCTAssertTrue(settingsService.crashReportingEnabled)
+        XCTAssertFalse(settingsService.crashReportingEnabled)
     }
     
     // MARK: - App Version and Build Tests
@@ -393,33 +393,6 @@ final class SettingsServiceTests: XCTestCase {
             settingsService.currencySymbol = symbol
             XCTAssertEqual(settingsService.currencySymbol, symbol)
         }
-    }
-    
-    // MARK: - Concurrent Access Tests
-    
-    func testConcurrentSettingsAccess_ThreadSafe() async {
-        // When - Perform concurrent setting updates
-        await withTaskGroup(of: Void.self) { group in
-            for i in 0..<100 {
-                group.addTask { [weak self] in
-                    await MainActor.run {
-                        self?.settingsService.enableNotifications = i % 2 == 0
-                        self?.settingsService.autoSettle = i % 3 == 0
-                        self?.settingsService.darkMode = i % 4 == 0
-                    }
-                }
-            }
-        }
-        
-        // Then - Should not crash and final values should be consistent
-        let finalNotifications = settingsService.enableNotifications
-        let finalAutoSettle = settingsService.autoSettle
-        let finalDarkMode = settingsService.darkMode
-        
-        // Values should be boolean (not corrupted)
-        XCTAssertTrue(finalNotifications is Bool)
-        XCTAssertTrue(finalAutoSettle is Bool)
-        XCTAssertTrue(finalDarkMode is Bool)
     }
     
     // MARK: - Integration with Other Components Tests

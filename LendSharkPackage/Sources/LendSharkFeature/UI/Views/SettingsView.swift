@@ -40,15 +40,18 @@ public struct SettingsView: View {
                     }
                 }
                 
-                Toggle("Auto-settle Transactions", isOn: $settingsService.autoSettle)
+                Toggle("Auto-settle Transactions (Not implemented)", isOn: $settingsService.autoSettle)
                     .tint(.inkBlack)
+                    .disabled(true)
                 
-                Toggle("iCloud Sync", isOn: $settingsService.enableiCloudSync)
+                Toggle("iCloud Sync (Not implemented)", isOn: $settingsService.enableiCloudSync)
                     .tint(.inkBlack)
+                    .disabled(true)
                 
                 if settingsService.isBiometricAvailable() {
-                    Toggle(settingsService.getBiometricType(), isOn: $settingsService.biometricAuth)
+                    Toggle("\(settingsService.getBiometricType()) (Not implemented)", isOn: $settingsService.biometricAuth)
                         .tint(.inkBlack)
+                        .disabled(true)
                 }
             } header: {
                 Text("General")
@@ -170,8 +173,9 @@ public struct SettingsView: View {
             
             // Privacy Settings Section
             Section {
-Toggle("Crash Reporting", isOn: $settingsService.crashReportingEnabled)
+    Toggle("Crash Reporting (Not implemented)", isOn: $settingsService.crashReportingEnabled)
                     .tint(.inkBlack)
+                    .disabled(true)
             } header: {
                 Text("Privacy")
             }
@@ -253,9 +257,24 @@ Toggle("Crash Reporting", isOn: $settingsService.crashReportingEnabled)
     }
     
     private func clearAllData() {
-        // Implementation to clear Core Data
-        // This would need access to the persistence controller through environment
-        print("Clearing all data...")
+        let fetchRequest: NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: "Transaction")
+        let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
+        deleteRequest.resultType = .resultTypeObjectIDs
+
+        do {
+            let result = try viewContext.execute(deleteRequest) as? NSBatchDeleteResult
+            let deletedObjectIDs = result?.result as? [NSManagedObjectID] ?? []
+            if !deletedObjectIDs.isEmpty {
+                NSManagedObjectContext.mergeChanges(
+                    fromRemoteContextSave: [NSDeletedObjectsKey: deletedObjectIDs],
+                    into: [viewContext]
+                )
+            }
+            try viewContext.save()
+            AppLogger.persistence.info("Cleared all Transaction records")
+        } catch {
+            AppLogger.persistence.error("Failed to clear all Transaction records", error: error)
+        }
     }
 }
 

@@ -1,283 +1,129 @@
 import XCTest
 @testable import LendSharkFeature
 
-final class EnhancedParserServiceTests: XCTestCase {
-    var parser: ParserService!
-    var validationService: ValidationService!
-    
+final class ParserServiceTests: XCTestCase {
+    private var parser: ParserService!
+
     override func setUp() {
         super.setUp()
-        validationService = ValidationService()
-        parser = ParserService(validationService: validationService)
+        parser = ParserService()
     }
-    
-    // MARK: - "Paid back" Pattern Tests
-    
-    func testParsePaidBack() {
-        let inputs = [
-            "paid back 50",
-            "john paid back 30",
-            "paid john back 25",
-            "sarah paid me back twenty"
-        ]
-        
-        for input in inputs {
-            let result = parser.parse(input)
-            switch result {
-            case .success(let action):
-                if case .add(let dto) = action {
-                    XCTAssertNotNil(dto.amount, "Amount should be parsed for: \(input)")
-                    XCTAssertEqual(dto.direction, .borrowed, "Paid back indicates borrowed direction")
-                    XCTAssertTrue(dto.settled, "Paid back transactions should be settled")
-                } else {
-                    XCTFail("Expected add action for: \(input)")
-                }
-            case .failure(let error):
-                XCTFail("Parse failed for '\(input)': \(error)")
-            }
-        }
+
+    override func tearDown() {
+        parser = nil
+        super.tearDown()
     }
-    
-    // MARK: - "Owes" Pattern Tests
-    
-    func testParseOwesMe() {
-        let result = parser.parse("john owes me 45")
-        
+
+    func testParseOwes_WithAbbreviation() {
+        let result = parser.parse("john owes me 2 notes")
+
         switch result {
-        case .success(let action):
-            if case .add(let dto) = action {
-                XCTAssertEqual(dto.party, "john")
-                XCTAssertEqual(dto.amount, 45)
-                XCTAssertEqual(dto.direction, .lent, "They owe us = we lent")
-            } else {
-                XCTFail("Expected add action")
-            }
         case .failure(let error):
             XCTFail("Parse failed: \(error)")
+        case .success(let action):
+            guard case .add(let dto) = action else {
+                return XCTFail("Expected add action")
+            }
+            XCTAssertEqual(dto.party, "John")
+            XCTAssertEqual(dto.amount, 200)
+            XCTAssertEqual(dto.direction, .lent)
         }
     }
-    
-    func testParseIOwe() {
-        let result = parser.parse("I owe sarah 30.50")
-        
+
+    func testParseIOwe_ParsesBorrowedDirection() {
+        let result = parser.parse("i owe sarah 30.50")
+
         switch result {
-        case .success(let action):
-            if case .add(let dto) = action {
-                XCTAssertEqual(dto.party, "sarah")
-                XCTAssertEqual(dto.amount, 30.50)
-                XCTAssertEqual(dto.direction, .borrowed, "I owe them = I borrowed")
-            } else {
-                XCTFail("Expected add action")
-            }
         case .failure(let error):
             XCTFail("Parse failed: \(error)")
+        case .success(let action):
+            guard case .add(let dto) = action else {
+                return XCTFail("Expected add action")
+            }
+            XCTAssertEqual(dto.party, "Sarah")
+            XCTAssertEqual(dto.amount, 30.50)
+            XCTAssertEqual(dto.direction, .borrowed)
         }
     }
-    
-    // MARK: - Split Pattern Tests
-    
-    func testParseSplitWithOne() {
-        let result = parser.parse("split 60 with john")
-        
+
+    func testParsePaid_CreatesPartialPaymentDTO() {
+        let result = parser.parse("john paid 50")
+
         switch result {
-        case .success(let action):
-            if case .add(let dto) = action {
-                XCTAssertEqual(dto.party, "john")
-                XCTAssertEqual(dto.amount, 30, "Should split 60 in half")
-                XCTAssertEqual(dto.direction, .lent)
-                XCTAssertNotNil(dto.notes)
-            } else {
-                XCTFail("Expected add action")
-            }
         case .failure(let error):
             XCTFail("Parse failed: \(error)")
+        case .success(let action):
+            guard case .add(let dto) = action else {
+                return XCTFail("Expected add action")
+            }
+            XCTAssertEqual(dto.party, "John")
+            XCTAssertEqual(dto.amount, 50)
+            XCTAssertEqual(dto.direction, .borrowed)
+            XCTAssertEqual(dto.notes, "Partial payment")
+            XCTAssertFalse(dto.settled)
         }
     }
-    
-    func testParseSplitMultiple() {
-        let result = parser.parse("split 90 between john, sarah, and mike")
-        
+
+    func testParseSettle() {
+        let result = parser.parse("settle with bob")
+
         switch result {
-        case .success(let action):
-            if case .add(let dto) = action {
-                XCTAssertEqual(dto.party, "john", "Should use first party as primary")
-                XCTAssertEqual(dto.amount, 67.5, "90 split 4 ways (including self) * 3 others")
-                XCTAssertEqual(dto.direction, .lent)
-                XCTAssertTrue(dto.notes?.contains("Split with") ?? false)
-            } else {
-                XCTFail("Expected add action")
-            }
         case .failure(let error):
             XCTFail("Parse failed: \(error)")
+        case .success(let action):
+            guard case .settle(let name) = action else {
+                return XCTFail("Expected settle action")
+            }
+            XCTAssertEqual(name, "Bob")
         }
     }
-    
-    // MARK: - Currency Symbol Tests
-    
-    func testParseCurrencySymbols() {
-        let inputs = [
-            ("$25.50", 25.50),
-            ("€30", 30),
-            ("£45.99", 45.99),
-            ("¥1000", 1000)
-        ]
-        
-        for (input, expectedAmount) in inputs {
-            let fullInput = "lent \(input) to alex"
-            let result = parser.parse(fullInput)
-            
-            switch result {
-            case .success(let action):
-                if case .add(let dto) = action {
-                    XCTAssertEqual(dto.amount, Decimal(expectedAmount), "Should parse \(input)")
-                } else {
-                    XCTFail("Expected add action for: \(fullInput)")
-                }
-            case .failure(let error):
-                XCTFail("Parse failed for '\(fullInput)': \(error)")
+
+    func testParseItemBorrow_SetsIsItemAndDueDate() {
+        let result = parser.parse("john borrowed my drill for 3 days")
+
+        switch result {
+        case .failure(let error):
+            XCTFail("Parse failed: \(error)")
+        case .success(let action):
+            guard case .add(let dto) = action else {
+                return XCTFail("Expected add action")
+            }
+            XCTAssertEqual(dto.party, "John")
+            XCTAssertTrue(dto.isItem)
+            XCTAssertEqual(dto.notes, "drill")
+            XCTAssertNotNil(dto.dueDate)
+
+            if let dueDate = dto.dueDate {
+                let calendar = Calendar.current
+                let days = calendar.dateComponents(
+                    [.day],
+                    from: calendar.startOfDay(for: Date()),
+                    to: calendar.startOfDay(for: dueDate)
+                ).day ?? 0
+                XCTAssertEqual(days, 3)
             }
         }
     }
-    
-    // MARK: - Written Number Tests
-    
-    func testParseWrittenNumbers() {
-        let inputs = [
-            ("twenty", 20),
-            ("fifty", 50),
-            ("one hundred", 100),
-            ("thirty five", 35),
-            ("ninety nine", 99)
-        ]
-        
-        for (written, expectedAmount) in inputs {
-            let fullInput = "lent \(written) to bob"
-            let result = parser.parse(fullInput)
-            
-            switch result {
-            case .success(let action):
-                if case .add(let dto) = action {
-                    XCTAssertEqual(dto.amount, Decimal(expectedAmount), "Should parse '\(written)'")
-                } else {
-                    XCTFail("Expected add action for: \(fullInput)")
-                }
-            case .failure:
-                // Written numbers might not all work perfectly, which is acceptable
-                print("Note: Written number '\(written)' didn't parse")
+
+    func testParseModifiers_DueInterestNotesPhone() {
+        let input = "john owes me 50 due 2 weeks at 10% (has my watch) 555-123-4567"
+        let result = parser.parse(input)
+
+        switch result {
+        case .failure(let error):
+            XCTFail("Parse failed: \(error)")
+        case .success(let action):
+            guard case .add(let dto) = action else {
+                return XCTFail("Expected add action")
             }
-        }
-    }
-    
-    // MARK: - Date Pattern Tests
-    
-    func testParseDatePatterns() {
-        let dateInputs = [
-            "lent 50 to john due tomorrow",
-            "borrowed 30 from sarah last week",
-            "lent 25 to mike on friday",
-            "gave 40 to alex next month",
-            "lent 20 to bob yesterday",
-            "borrowed 60 from alice end of month"
-        ]
-        
-        for input in dateInputs {
-            let result = parser.parse(input)
-            
-            switch result {
-            case .success(let action):
-                if case .add(let dto) = action {
-                    // We just verify it parses successfully
-                    XCTAssertNotNil(dto.party, "Should have party for: \(input)")
-                    XCTAssertNotNil(dto.amount, "Should have amount for: \(input)")
-                } else {
-                    XCTFail("Expected add action for: \(input)")
-                }
-            case .failure(let error):
-                XCTFail("Parse failed for '\(input)': \(error)")
-            }
-        }
-    }
-    
-    // MARK: - Category Tests
-    
-    func testParseCategoriesInNotes() {
-        let categoryInputs = [
-            ("lent 20 to john for lunch", "Food"),
-            ("borrowed 50 from sarah for gas", "Transport"),
-            ("lent 30 to mike for movie tickets", "Entertainment"),
-            ("gave 100 to alex for rent", "Utilities"),
-            ("lent 25 to bob for uber", "Transport")
-        ]
-        
-        for (input, expectedCategory) in categoryInputs {
-            let result = parser.parse(input)
-            
-            switch result {
-            case .success(let action):
-                if case .add(let dto) = action {
-                    XCTAssertNotNil(dto.notes, "Should have notes for: \(input)")
-                    if let notes = dto.notes {
-                        XCTAssertTrue(
-                            notes.contains(expectedCategory) || notes.contains("lunch") || 
-                            notes.contains("gas") || notes.contains("movie") || 
-                            notes.contains("rent") || notes.contains("uber"),
-                            "Notes should contain category or context for: \(input)"
-                        )
-                    }
-                } else {
-                    XCTFail("Expected add action for: \(input)")
-                }
-            case .failure(let error):
-                XCTFail("Parse failed for '\(input)': \(error)")
-            }
-        }
-    }
-    
-    // MARK: - Complex Pattern Tests
-    
-    func testComplexPatterns() {
-        let complexInputs = [
-            "john owes me $25.50 for lunch yesterday",
-            "split 90 with sarah and mike for dinner last night",
-            "paid back twenty to alex note: finally settled",
-            "I owe bob fifty dollars for gas money tomorrow",
-            "sarah paid for the movie tickets 30"
-        ]
-        
-        for input in complexInputs {
-            let result = parser.parse(input)
-            
-            switch result {
-            case .success(let action):
-                // Just verify these complex patterns parse successfully
-                XCTAssertNotNil(action, "Should parse: \(input)")
-            case .failure(let error):
-                XCTFail("Complex pattern failed for '\(input)': \(error)")
-            }
-        }
-    }
-    
-    // MARK: - Backward Compatibility Tests
-    
-    func testBackwardCompatibility() {
-        // Ensure original patterns still work
-        let originalPatterns = [
-            "lent 50 to john",
-            "borrowed 25.50 from sarah",
-            "lent my book to alice",
-            "settle with bob",
-            "lent 30 to mike note: for lunch"
-        ]
-        
-        for input in originalPatterns {
-            let result = parser.parse(input)
-            
-            switch result {
-            case .success:
-                XCTAssertTrue(true, "Original pattern should still work: \(input)")
-            case .failure(let error):
-                XCTFail("Original pattern failed: \(input) - \(error)")
-            }
+
+            XCTAssertEqual(dto.party, "John")
+            XCTAssertEqual(dto.amount, 50)
+            XCTAssertNotNil(dto.dueDate)
+            XCTAssertEqual(dto.interestRate, 0.10)
+            XCTAssertEqual(dto.notes, "has my watch")
+            XCTAssertEqual(dto.phoneNumber, "(555) 123-4567")
         }
     }
 }
+

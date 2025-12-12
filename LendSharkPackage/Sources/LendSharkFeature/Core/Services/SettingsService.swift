@@ -12,7 +12,7 @@ public final class SettingsService: ObservableObject {
     @AppStorage("autoSettle") public var autoSettle = false
     @AppStorage("darkMode") public var darkMode = false  // Light mode (paper) by default
     @AppStorage("biometricAuth") public var biometricAuth = false
-    @AppStorage("enableiCloudSync") public var enableiCloudSync = true
+    @AppStorage("enableiCloudSync") public var enableiCloudSync = false
 
     // MARK: - Loan Shark Defaults
     @AppStorage("defaultInterestRate") public var defaultInterestRate = 10  // Weekly %
@@ -32,7 +32,7 @@ public final class SettingsService: ObservableObject {
     
     // MARK: - Privacy Settings
     @AppStorage("analyticsEnabled") public var analyticsEnabled = false
-    @AppStorage("crashReportingEnabled") public var crashReportingEnabled = true
+    @AppStorage("crashReportingEnabled") public var crashReportingEnabled = false
     
     // MARK: - Initialization
     /// Public initializer - no longer singleton
@@ -153,12 +153,12 @@ public final class SettingsService: ObservableObject {
         autoSettle = false
         darkMode = false
         biometricAuth = false
-        enableiCloudSync = true
+        enableiCloudSync = false
         currencySymbol = "$"
         exportFormat = "PDF"
         notificationFrequency = "Daily"
         analyticsEnabled = false
-        crashReportingEnabled = true
+        crashReportingEnabled = false
         // Loan shark defaults
         defaultInterestRate = 10
         defaultLoanDuration = 14
@@ -179,6 +179,11 @@ public final class SettingsService: ObservableObject {
     
     // MARK: - Notification Scheduling
     public func scheduleNotifications() {
+        #if !os(iOS)
+        // UNUserNotificationCenter usage is not reliable in SwiftPM/macOS test contexts.
+        // This app targets iOS; keep notification scheduling iOS-only.
+        return
+        #else
         Task {
             await requestNotificationPermission()
             
@@ -203,11 +208,14 @@ public final class SettingsService: ObservableObject {
                 break
             }
         }
+        #endif
     }
     
     public func cancelAllNotifications() {
+        #if os(iOS)
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        #endif
     }
     
     @MainActor

@@ -6,27 +6,19 @@ import CoreData
 final class EnforcerTests: XCTestCase {
     
     var testContext: NSManagedObjectContext!
+    private var persistenceController: PersistenceController!
     
     override func setUp() {
         super.setUp()
-        
-        // Create in-memory Core Data stack for testing
-        let container = NSPersistentContainer(name: "LendShark")
-        let description = NSPersistentStoreDescription()
-        description.type = NSInMemoryStoreType
-        container.persistentStoreDescriptions = [description]
-        
-        container.loadPersistentStores { _, error in
-            if let error = error {
-                fatalError("Failed to load test store: \(error)")
-            }
-        }
-        
-        testContext = container.viewContext
+
+        // Use the package's Core Data stack so tests work under SwiftPM (no compiled .momd).
+        persistenceController = PersistenceController(inMemory: true)
+        testContext = persistenceController.container.viewContext
     }
     
     override func tearDown() {
         testContext = nil
+        persistenceController = nil
         super.tearDown()
     }
     
@@ -192,6 +184,7 @@ final class EnforcerTests: XCTestCase {
 /// Quick integration test to verify app doesn't crash
 final class IntegrationSmokeTests: XCTestCase {
     
+    @MainActor
     func testAppComponentsLoad() {
         // Test that key views can be instantiated without crashing
         let _ = LedgerView()
@@ -199,7 +192,14 @@ final class IntegrationSmokeTests: XCTestCase {
         let _ = MainTabView()
         
         // Test DTO creation
-        let debtorInfo = DebtLedger.DebtorInfo(name: "Test", totalOwed: 100, daysOverdue: 5)
+        let debtorInfo = DebtLedger.DebtorInfo(
+            name: "Test",
+            principal: 100,
+            accruedInterest: 0,
+            daysOverdue: 5,
+            notes: nil,
+            items: []
+        )
         XCTAssertEqual(debtorInfo.name, "Test")
         XCTAssertEqual(debtorInfo.totalOwed, 100)
         XCTAssertEqual(debtorInfo.daysOverdue, 5)

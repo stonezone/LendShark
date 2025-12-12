@@ -44,8 +44,11 @@ extension Transaction {
     /// Settle ALL unsettled transactions with a specific person
     /// Like marking the slate clean
     static func settleAll(with person: String, in context: NSManagedObjectContext) throws {
+        let normalizedPerson = person.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedPerson.isEmpty else { return }
+
         let request: NSFetchRequest<Transaction> = Transaction.fetchRequest()
-        request.predicate = NSPredicate(format: "party == %@ AND settled == false", person)
+        request.predicate = NSPredicate(format: "party ==[c] %@ AND settled == false", normalizedPerson)
         
         let transactions = try context.fetch(request)
         for transaction in transactions {
@@ -80,8 +83,11 @@ extension Transaction {
     /// Mark all debts with person as defaulted (won't pay)
     /// Adds a note and effectively writes them off
     static func markAsDefaulted(person: String, in context: NSManagedObjectContext) throws {
+        let normalizedPerson = person.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedPerson.isEmpty else { return }
+
         let request: NSFetchRequest<Transaction> = Transaction.fetchRequest()
-        request.predicate = NSPredicate(format: "party == %@ AND settled == false AND direction == 1", person)
+        request.predicate = NSPredicate(format: "party ==[c] %@ AND settled == false AND direction == 1", normalizedPerson)
         
         let transactions = try context.fetch(request)
         for transaction in transactions {
@@ -105,8 +111,11 @@ extension Transaction {
     
     /// Get total amount owed by a specific person (unsettled only)
     static func totalOwed(by person: String, in context: NSManagedObjectContext) -> Decimal {
+        let normalizedPerson = person.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedPerson.isEmpty else { return 0 }
+
         let request: NSFetchRequest<Transaction> = Transaction.fetchRequest()
-        request.predicate = NSPredicate(format: "party == %@ AND settled == false", person)
+        request.predicate = NSPredicate(format: "party ==[c] %@ AND settled == false", normalizedPerson)
         
         do {
             let transactions = try context.fetch(request)

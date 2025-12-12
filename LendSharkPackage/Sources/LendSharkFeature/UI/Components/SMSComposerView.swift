@@ -1,7 +1,7 @@
 import SwiftUI
-import MessageUI
 
-#if os(iOS)
+#if os(iOS) && canImport(MessageUI)
+import MessageUI
 
 /// Result of SMS composition attempt
 public enum SMSResult {

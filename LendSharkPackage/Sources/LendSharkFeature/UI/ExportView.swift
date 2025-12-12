@@ -64,6 +64,7 @@ public struct ExportView: View {
         lines.append("-----------------")
 
         let debtors = DebtLedger.getDebtors(from: Array(transactions))
+        func absDecimal(_ value: Decimal) -> Decimal { value < 0 ? -value : value }
 
         // Section: They owe me (money)
         let theyOweMe = debtors.filter { $0.owesMe && $0.totalOwed > 0 }
@@ -81,15 +82,16 @@ public struct ExportView: View {
         }
 
         // Section: I owe them (money)
-        let iOwe = debtors.filter { $0.iOwe && $0.totalOwed > 0 }
+        let iOwe = debtors.filter { $0.iOwe }
         if !iOwe.isEmpty {
             lines.append("")
             lines.append("I OWE:")
             var total: Decimal = 0
             for debtor in iOwe {
-                let amount = NSDecimalNumber(decimal: debtor.totalOwed).doubleValue
-                lines.append("  \(debtor.name): $\(String(format: "%.2f", amount))")
-                total += debtor.totalOwed
+                let amount = absDecimal(debtor.totalOwed)
+                let amountDouble = NSDecimalNumber(decimal: amount).doubleValue
+                lines.append("  \(debtor.name): $\(String(format: "%.2f", amountDouble))")
+                total += amount
             }
             let totalAmount = NSDecimalNumber(decimal: total).doubleValue
             lines.append("  SUBTOTAL: $\(String(format: "%.2f", totalAmount))")
@@ -125,7 +127,7 @@ public struct ExportView: View {
         lines.append("")
         lines.append("-----------------")
         let totalOwedToMe = theyOweMe.reduce(Decimal(0)) { $0 + $1.totalOwed }
-        let totalIOwe = iOwe.reduce(Decimal(0)) { $0 + $1.totalOwed }
+        let totalIOwe = iOwe.reduce(Decimal(0)) { $0 + absDecimal($1.totalOwed) }
         let netAmount = totalOwedToMe - totalIOwe
 
         lines.append("NET: \(netAmount >= 0 ? "+" : "")$\(String(format: "%.2f", NSDecimalNumber(decimal: netAmount).doubleValue))")

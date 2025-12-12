@@ -19,18 +19,21 @@ final class TransactionDTOTests: XCTestCase {
     
     func testDTOEquality() {
         let id = UUID()
+        let timestamp = Date()
         let dto1 = TransactionDTO(
             id: id,
             party: "Jane",
             amount: 25.0,
-            direction: .borrowed
+            direction: .borrowed,
+            timestamp: timestamp
         )
         
         let dto2 = TransactionDTO(
             id: id,
             party: "Jane",
             amount: 25.0,
-            direction: .borrowed
+            direction: .borrowed,
+            timestamp: timestamp
         )
         
         XCTAssertEqual(dto1, dto2)
@@ -56,6 +59,6 @@ final class TransactionDTOTests: XCTestCase {
     }
     
     func testVersionConstant() {
-        XCTAssertEqual(TransactionDTO.version, "1.0.0")
+        XCTAssertEqual(TransactionDTO.version, "1.1.0")
     }
 }

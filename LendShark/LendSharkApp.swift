@@ -21,6 +21,7 @@ struct LendSharkApp: App {
             MainTabView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environmentObject(settingsService)
+                .preferredColorScheme(settingsService.darkMode ? .dark : .light)
         }
     }
 }

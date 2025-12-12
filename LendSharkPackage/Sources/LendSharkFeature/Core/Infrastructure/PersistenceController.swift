@@ -8,20 +8,32 @@ private let logger = AppLogger.persistence
 public final class PersistenceController: Sendable {
     // Load the Core Data model from Bundle.module
     nonisolated(unsafe) private static let managedObjectModel: NSManagedObjectModel = {
-        let bundles = [
-            Bundle.main,
-            Bundle(for: PersistenceController.self),
-            Bundle.module
-        ]
+        let bundles = [Bundle.module, Bundle(for: PersistenceController.self), Bundle.main]
+
+        // Prefer compiled models when present (Xcode builds).
         for bundle in bundles {
             if let modelURL = bundle.url(forResource: "LendShark", withExtension: "momd"),
-               let model = NSManagedObjectModel(contentsOf: modelURL) {
-                logger.info("Successfully loaded Core Data model from \(bundle.bundleIdentifier ?? "unknown bundle")")
+               let model = NSManagedObjectModel(contentsOf: modelURL),
+               !model.entities.isEmpty {
+                logger.info("Loaded Core Data model (momd) from \(bundle.bundleIdentifier ?? "unknown bundle")")
+                return model
+            }
+
+            if let modelURL = bundle.url(forResource: "LendShark", withExtension: "mom"),
+               let model = NSManagedObjectModel(contentsOf: modelURL),
+               !model.entities.isEmpty {
+                logger.info("Loaded Core Data model (mom) from \(bundle.bundleIdentifier ?? "unknown bundle")")
                 return model
             }
         }
-        logger.critical("Failed to find LendShark.momd in any bundle - falling back to in-memory store")
-        // Create an empty model as fallback - app will run but without persistence
+
+        // Fall back to merged model if a compiled model exists under a different name.
+        if let merged = NSManagedObjectModel.mergedModel(from: bundles), !merged.entities.isEmpty {
+            logger.info("Loaded merged Core Data model from available bundles")
+            return merged
+        }
+
+        logger.critical("Failed to find a compiled Core Data model - falling back to programmatic model")
         let model = NSManagedObjectModel()
         
         // Create Transaction entity programmatically as fallback
@@ -29,7 +41,7 @@ public final class PersistenceController: Sendable {
         transactionEntity.name = "Transaction"
         transactionEntity.managedObjectClassName = "Transaction"
         
-        // Add basic attributes
+        // Add attributes (must match Core/Infrastructure/LendShark.xcdatamodeld schema)
         let idAttribute = NSAttributeDescription()
         idAttribute.name = "id"
         idAttribute.attributeType = .UUIDAttributeType
@@ -38,12 +50,14 @@ public final class PersistenceController: Sendable {
         let partyAttribute = NSAttributeDescription()
         partyAttribute.name = "party"
         partyAttribute.attributeType = .stringAttributeType
-        partyAttribute.isOptional = true
+        partyAttribute.isOptional = false
+        partyAttribute.defaultValue = "Unknown"
         
         let amountAttribute = NSAttributeDescription()
         amountAttribute.name = "amount"
         amountAttribute.attributeType = .decimalAttributeType
         amountAttribute.isOptional = true
+        amountAttribute.defaultValue = NSDecimalNumber(string: "0.0")
         
         let timestampAttribute = NSAttributeDescription()
         timestampAttribute.name = "timestamp"
@@ -54,7 +68,7 @@ public final class PersistenceController: Sendable {
         directionAttribute.name = "direction"
         directionAttribute.attributeType = .integer16AttributeType
         directionAttribute.isOptional = false
-        directionAttribute.defaultValue = Int16(0)
+        directionAttribute.defaultValue = Int16(1)
         
         let settledAttribute = NSAttributeDescription()
         settledAttribute.name = "settled"
@@ -77,11 +91,22 @@ public final class PersistenceController: Sendable {
         dueDateAttribute.name = "dueDate"
         dueDateAttribute.attributeType = .dateAttributeType
         dueDateAttribute.isOptional = true
+
+        let interestRateAttribute = NSAttributeDescription()
+        interestRateAttribute.name = "interestRate"
+        interestRateAttribute.attributeType = .decimalAttributeType
+        interestRateAttribute.isOptional = true
+        interestRateAttribute.defaultValue = NSDecimalNumber(string: "0.0")
         
         let notesAttribute = NSAttributeDescription()
         notesAttribute.name = "notes"
         notesAttribute.attributeType = .stringAttributeType
         notesAttribute.isOptional = true
+
+        let phoneNumberAttribute = NSAttributeDescription()
+        phoneNumberAttribute.name = "phoneNumber"
+        phoneNumberAttribute.attributeType = .stringAttributeType
+        phoneNumberAttribute.isOptional = true
         
         let cloudKitRecordIDAttribute = NSAttributeDescription()
         cloudKitRecordIDAttribute.name = "cloudKitRecordID"
@@ -91,7 +116,7 @@ public final class PersistenceController: Sendable {
         transactionEntity.properties = [
             idAttribute, partyAttribute, amountAttribute, timestampAttribute,
             directionAttribute, settledAttribute, isItemAttribute, itemAttribute,
-            dueDateAttribute, notesAttribute, cloudKitRecordIDAttribute
+            dueDateAttribute, interestRateAttribute, notesAttribute, phoneNumberAttribute, cloudKitRecordIDAttribute
         ]
         model.entities = [transactionEntity]
         
@@ -128,7 +153,9 @@ public final class PersistenceController: Sendable {
         container = NSPersistentContainer(name: "LendShark", managedObjectModel: Self.managedObjectModel)
 
         if inMemory {
-            container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
+            let description = NSPersistentStoreDescription()
+            description.type = NSInMemoryStoreType
+            container.persistentStoreDescriptions = [description]
         }
 
         container.loadPersistentStores { [weak self] _, error in

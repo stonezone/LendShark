@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(MessageUI)
 import MessageUI
+#endif
 
 /// SMS Service for sending collection reminders
 /// Uses ReminderSystem message templates for consistent messaging
@@ -7,7 +9,11 @@ public struct SMSService {
     
     /// Check if device can send text messages
     public static func canSendText() -> Bool {
-        MFMessageComposeViewController.canSendText()
+        #if canImport(MessageUI)
+        return MFMessageComposeViewController.canSendText()
+        #else
+        return false
+        #endif
     }
     
     /// Generate reminder message based on days overdue

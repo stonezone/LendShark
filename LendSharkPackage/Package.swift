@@ -18,6 +18,9 @@ let package = Package(
         .target(
             name: "LendSharkFeature",
             dependencies: [],
+            exclude: [
+                "Core/Services/ParserServiceDocumentation.md"
+            ],
             resources: [
                 .process("Core/Infrastructure/LendShark.xcdatamodeld")
             ]
