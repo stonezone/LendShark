@@ -8,6 +8,7 @@ import MessageUI
 public struct SMSService {
     
     /// Check if device can send text messages
+    @MainActor
     public static func canSendText() -> Bool {
         #if canImport(MessageUI)
         return MFMessageComposeViewController.canSendText()

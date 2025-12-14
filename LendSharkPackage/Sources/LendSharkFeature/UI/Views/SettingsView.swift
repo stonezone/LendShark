@@ -186,6 +186,7 @@ public struct SettingsView: View {
                     showingClearDataAlert = true
                 }
                 .foregroundColor(.red)
+                .accessibilityIdentifier("lendshark.settings.clearAllData")
                 
                 Button("Reset Settings") {
                     showingResetAlert = true
@@ -257,11 +258,20 @@ public struct SettingsView: View {
     }
     
     private func clearAllData() {
-        let fetchRequest: NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: "Transaction")
-        let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
-        deleteRequest.resultType = .resultTypeObjectIDs
+        let storeTypes = viewContext.persistentStoreCoordinator?.persistentStores.map(\.type) ?? []
+        let usesInMemoryStore = storeTypes.contains(NSInMemoryStoreType)
+
+        // Batch delete is fast for SQLite stores, but can crash in some in-memory/test contexts.
+        if usesInMemoryStore {
+            clearAllDataByDeletingObjects()
+            return
+        }
 
         do {
+            let fetchRequest: NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: "Transaction")
+            let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
+            deleteRequest.resultType = .resultTypeObjectIDs
+
             let result = try viewContext.execute(deleteRequest) as? NSBatchDeleteResult
             let deletedObjectIDs = result?.result as? [NSManagedObjectID] ?? []
             if !deletedObjectIDs.isEmpty {
@@ -272,6 +282,19 @@ public struct SettingsView: View {
             }
             try viewContext.save()
             AppLogger.persistence.info("Cleared all Transaction records")
+        } catch {
+            AppLogger.persistence.warning("Batch delete failed; falling back to per-object deletion")
+            clearAllDataByDeletingObjects()
+        }
+    }
+
+    private func clearAllDataByDeletingObjects() {
+        do {
+            let fetch: NSFetchRequest<Transaction> = Transaction.fetchRequest()
+            let objects = try viewContext.fetch(fetch)
+            objects.forEach { viewContext.delete($0) }
+            try viewContext.save()
+            AppLogger.persistence.info("Cleared all Transaction records via per-object deletion")
         } catch {
             AppLogger.persistence.error("Failed to clear all Transaction records", error: error)
         }

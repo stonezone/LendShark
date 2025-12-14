@@ -49,7 +49,7 @@ public struct AppLogger: Sendable {
 /// Pre-configured loggers for different subsystems
 public extension AppLogger {
     static let persistence = AppLogger(category: "Persistence")
-    static let sync = AppLogger(category: "CloudKit")
+    static let sync = AppLogger(category: "Sync")
     static let transaction = AppLogger(category: "Transaction")
     static let validation = AppLogger(category: "Validation")
     static let settings = AppLogger(category: "Settings")

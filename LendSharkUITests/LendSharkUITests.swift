@@ -1,26 +1,97 @@
 import XCTest
 
 final class LendSharkUITests: XCTestCase {
-    override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
+    private var app: XCUIApplication!
 
-        // In UI tests it is usually best to stop immediately when a failure occurs.
+    override func setUpWithError() throws {
         continueAfterFailure = false
 
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
+        app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
     }
 
     override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
+        app?.terminate()
+        app = nil
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
-        app.launch()
+    func testLaunchAndTabSwitching() throws {
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        XCTAssertTrue(true)
+        app.tabBars.buttons["The Ledger"].tap()
+        XCTAssertTrue(app.staticTexts["THE LEDGER"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Quick Add"].tap()
+        XCTAssertTrue(app.staticTexts["QUICK ADD"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Due Today"].tap()
+        XCTAssertTrue(app.staticTexts["TODAY'S COLLECTIONS"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Collections"].tap()
+        XCTAssertTrue(app.staticTexts["COLLECTIONS"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Tools"].tap()
+        XCTAssertTrue(app.staticTexts["TOOLS"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testQuickAddCreatesLedgerEntry() throws {
+        app.tabBars.buttons["Quick Add"].tap()
+
+        let input = app.textFields["lendshark.quickadd.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap()
+        input.typeText("lent 50 to john")
+
+        let addButton = app.buttons["lendshark.quickadd.addButton"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5))
+        addButton.tap()
+
+        app.tabBars.buttons["The Ledger"].tap()
+        XCTAssertTrue(app.staticTexts["JOHN"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testClearAllDataRemovesEntries() throws {
+        // Create an entry
+        app.tabBars.buttons["Quick Add"].tap()
+
+        let input = app.textFields["lendshark.quickadd.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap()
+        input.typeText("lent 50 to john")
+
+        let addButton = app.buttons["lendshark.quickadd.addButton"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5))
+        addButton.tap()
+
+        // Confirm it shows in ledger
+        app.tabBars.buttons["The Ledger"].tap()
+        XCTAssertTrue(app.staticTexts["JOHN"].waitForExistence(timeout: 5))
+
+        // Clear all data in Settings
+        app.tabBars.buttons["Tools"].tap()
+        XCTAssertTrue(app.staticTexts["TOOLS"].waitForExistence(timeout: 5))
+
+        let settingsRow = app.staticTexts["lendshark.tools.settings"]
+        XCTAssertTrue(settingsRow.waitForExistence(timeout: 5))
+        settingsRow.tap()
+
+        let clearAllData = app.buttons["lendshark.settings.clearAllData"]
+        for _ in 0..<10 where !clearAllData.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(clearAllData.waitForExistence(timeout: 5))
+        clearAllData.tap()
+
+        let alert = app.alerts["Clear All Data"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["Clear"].tap()
+
+        // Verify entry is gone
+        app.tabBars.buttons["The Ledger"].tap()
+        XCTAssertFalse(app.staticTexts["JOHN"].waitForExistence(timeout: 2))
     }
 }

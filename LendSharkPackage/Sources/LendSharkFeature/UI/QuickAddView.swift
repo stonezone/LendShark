@@ -112,6 +112,7 @@ public struct QuickAddView: View {
                     .padding(.vertical, 14)
                     .background(Color.inkBlack)
                 }
+                .accessibilityIdentifier("lendshark.quickadd.addButton")
                 .disabled(previewText.isEmpty)
                 .opacity(previewText.isEmpty ? 0.5 : 1.0)
 
@@ -482,6 +483,7 @@ public struct QuickAddView: View {
             .textFieldStyle(.plain)
             .padding(.vertical, 12)
             .focused($isInputFocused)
+            .accessibilityIdentifier("lendshark.quickadd.input")
             .onChange(of: inputText) { oldValue, newValue in
                 detectNameInInput(newValue)
             }
@@ -560,36 +562,39 @@ public struct QuickAddView: View {
     
     private func loadContactsIfNeeded() {
         guard !contactsLoaded else { return }
-        
-        let store = CNContactStore()
-        let keys: [CNKeyDescriptor] = [
-            CNContactGivenNameKey as CNKeyDescriptor,
-            CNContactFamilyNameKey as CNKeyDescriptor,
-            CNContactPhoneNumbersKey as CNKeyDescriptor
-        ]
-        
-        let fetchAndUpdate: () -> Void = {
-            DispatchQueue.global(qos: .userInitiated).async {
-                let results = self.fetchContacts(from: store, keys: keys)
-                DispatchQueue.main.async {
-                    self.contactSuggestions = results
-                    self.contactsLoaded = true
-                    self.updateSuggestions(for: self.inputText)
-                }
-            }
-        }
-        
+        guard !ProcessInfo.processInfo.arguments.contains("-ui-testing") else { return }
+
         let status = CNContactStore.authorizationStatus(for: .contacts)
         switch status {
         case .notDetermined:
-            store.requestAccess(for: .contacts) { granted, _ in
+            CNContactStore().requestAccess(for: .contacts) { granted, _ in
                 guard granted else { return }
-                fetchAndUpdate()
+                Task { @MainActor in
+                    self.fetchContactsAndUpdateUI()
+                }
             }
         case .authorized:
-            fetchAndUpdate()
+            fetchContactsAndUpdateUI()
         default:
             break
+        }
+    }
+
+    private func fetchContactsAndUpdateUI() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let store = CNContactStore()
+            let keys: [CNKeyDescriptor] = [
+                CNContactGivenNameKey as CNKeyDescriptor,
+                CNContactFamilyNameKey as CNKeyDescriptor,
+                CNContactPhoneNumbersKey as CNKeyDescriptor
+            ]
+
+            let results = self.fetchContacts(from: store, keys: keys)
+            DispatchQueue.main.async {
+                self.contactSuggestions = results
+                self.contactsLoaded = true
+                self.updateSuggestions(for: self.inputText)
+            }
         }
     }
     

@@ -27,6 +27,16 @@ struct ToolsView: View {
                             .foregroundColor(.inkBlack)
                     }
                     .listRowBackground(Color.clear)
+
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Text("Settings")
+                            .font(.system(size: 16, weight: .medium, design: .monospaced))
+                            .foregroundColor(.inkBlack)
+                            .accessibilityIdentifier("lendshark.tools.settings")
+                    }
+                    .listRowBackground(Color.clear)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -54,4 +64,3 @@ struct ToolsView: View {
         ToolsView()
     }
 }
-

@@ -136,6 +136,7 @@ struct LedgerView: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                     .background(Color.clear)
+                    .accessibilityIdentifier("lendshark.ledger.list")
                 }
             }
         }
